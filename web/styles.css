@@ -1,0 +1,32 @@
+:root { --gap: 16px; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, sans-serif; }
+.toolbar {
+  position: sticky; top: 0; display: flex; gap: 8px; padding: 10px;
+  background: #111; color: #fff; z-index: 10;
+}
+.toolbar input { flex: 1; padding: 8px; }
+.toolbar button { padding: 8px 12px; }
+.board {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 360px;
+  gap: var(--gap); overflow-x: auto; padding: var(--gap);
+}
+.col { background: #fff; border-radius: 12px; padding: 10px; box-shadow: 0 4px 16px rgba(0,0,0,.08); }
+.col img { width: 100%; height: auto; border-radius: 8px; background: #f4f4f4; }
+.col .posts { display: grid; gap: 8px; margin-top: 8px; }
+.handle { margin: 0 0 8px; font-size: 16px; }
+
+.col-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
+.btn-del { padding: 6px 10px; border: 1px solid #ddd; border-radius: 8px; background:#f8f8f8; cursor:pointer; }
+.btn-del:hover { background:#eee; }
+.handle a { color: inherit; text-decoration: none; }
+.handle a:hover { text-decoration: underline; }
+
+/* progress overlay */
+.progress-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+.progress-overlay.hide { display: none; }
+.progress-card { width: min(520px, 92vw); background: #fff; border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.2); padding: 18px 16px; }
+.progress-title { font-weight: 700; margin-bottom: 10px; }
+.progress-bar { width: 100%; height: 10px; border-radius: 999px; background: #f1f5f9; overflow: hidden; }
+.progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #60a5fa, #34d399, #f59e0b); transition: width .2s ease; }
+.progress-text { margin-top: 8px; font-size: 12px; color: #475569; text-align: right; }

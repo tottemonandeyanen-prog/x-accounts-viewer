@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>X参考アカウント一覧</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="./styles.css">
+  <script>
+    // ローカルAPIでテストする間
+    window.API_BASE = "http://localhost:8080";
+    // R2公開URL
+    window.R2_PUBLIC_HOST = "https://pub-6f709a4b568e4d1d91bc44f178701b86.r2.dev";
+  </script>
+</head>
+<body>
+  <aside class="toolbar">
+    <input id="handles" placeholder="@a,@b,@c（カンマ区切り）" />
+    <button id="btn-add">アカウント追加</button>
+    <button id="btn-refresh">更新</button>
+  </aside>
+
+  <main id="capture-root" class="board" aria-live="polite"></main>
+
+  <!-- プログレスバー -->
+  <div id="progress-overlay" class="progress-overlay hide" aria-live="polite" aria-busy="true">
+    <div class="progress-card">
+      <div class="progress-title">更新中…</div>
+      <div class="progress-bar">
+        <div class="progress-fill" style="width:0%"></div>
+      </div>
+      <div class="progress-text">
+        <span id="progress-count">0</span>/<span id="progress-total">0</span>
+        （<span id="progress-perc">0</span>%）
+      </div>
+    </div>
+  </div>
+
+  <!-- テンプレート -->
+  <template id="col-tpl">
+    <section class="col">
+      <div class="col-head">
+        <h2 class="handle"></h2>
+        <button class="btn-del" title="このアカウント列を削除">削除</button>
+      </div>
+      <img class="profile" alt="">
+      <div class="posts">
+        <img alt=""><img alt=""><img alt="">
+      </div>
+    </section>
+  </template>
+
+  <script src="./app.js" type="module"></script>
+</body>
+</html>

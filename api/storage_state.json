@@ -1,0 +1,225 @@
+{
+  "cookies": [
+    {
+      "name": "guest_id_marketing",
+      "value": "v1%3A176216507936609254",
+      "domain": ".x.com",
+      "path": "/",
+      "expires": 1796725423.181142,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "guest_id_ads",
+      "value": "v1%3A176216507936609254",
+      "domain": ".x.com",
+      "path": "/",
+      "expires": 1796725423.180992,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "guest_id",
+      "value": "v1%3A176216507936609254",
+      "domain": ".x.com",
+      "path": "/",
+      "expires": 1796725080.452363,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "personalization_id",
+      "value": "\"v1_DVk6tBP2RSnZugNNo1g3Iw==\"",
+      "domain": ".x.com",
+      "path": "/",
+      "expires": 1796725080.510579,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "gt",
+      "value": "1985290351595381014",
+      "domain": ".x.com",
+      "path": "/",
+      "expires": 1762174080.510619,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "__cuid",
+      "value": "da41ae0d9fa74056a50646de95b2ae9b",
+      "domain": ".x.com",
+      "path": "/",
+      "expires": 1796725422,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "guest_id_marketing",
+      "value": "v1%3A176216508188163530",
+      "domain": ".twitter.com",
+      "path": "/",
+      "expires": 1796725082.962603,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "guest_id_ads",
+      "value": "v1%3A176216508188163530",
+      "domain": ".twitter.com",
+      "path": "/",
+      "expires": 1796725082.962652,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "personalization_id",
+      "value": "\"v1_yIo04iUi47k/osqDCskemw==\"",
+      "domain": ".twitter.com",
+      "path": "/",
+      "expires": 1796725082.962698,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "guest_id",
+      "value": "v1%3A176216508188163530",
+      "domain": ".twitter.com",
+      "path": "/",
+      "expires": 1796725082.962719,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "g_state",
+      "value": "{\"i_l\":0,\"i_ll\":1762165083416,\"i_b\":\"Ie1cqss3HsFxkExCsxrTsRmIzZK43AxyOs2sX0Xs1uM\"}",
+      "domain": "x.com",
+      "path": "/",
+      "expires": 1777717083,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "NID",
+      "value": "526=qFB4jt_htrOxycyYFhmaYaMq7TIhIiNrZBZdfDZ2NosvaycH9yGOes9TjU5Wj45lrVdMJwufwyDxTIwRTwj_uPeqPUv102MIeTNDxuXsaS1nuMGhE58oNJLeXm_eTcVtc3GYn3ku62a_BpVLyGQ689oTk2bqj3C2kMQr-o3fAjfo31Q3kEjDddX3l1qZChWrFw",
+      "domain": ".google.com",
+      "path": "/",
+      "expires": 1777976471.35012,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "kdt",
+      "value": "3kWiM5xBOrbd0N0Q5KV2N0hTXYGFrO36lD6Xz7fW",
+      "domain": ".x.com",
+      "path": "/",
+      "expires": 1796725411.827485,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "auth_token",
+      "value": "34ad59013bfa3f20a5cb131a27ee1e7126702623",
+      "domain": ".x.com",
+      "path": "/",
+      "expires": 1796725411.827642,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "ct0",
+      "value": "1d3ec1f20d6f83a78cfc7e341416e5d5df91e091fb98a11ad510c6148cdeefed553832734592a5757577f8446b2d4785b43c7f2c178e832a3cf72a19da1ccac6d5adf88595493ae269ab0e8f7dcfbc9b",
+      "domain": ".x.com",
+      "path": "/",
+      "expires": 1796725412.07125,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "att",
+      "value": "1-iW6NQ6vvtnSPv0YpTGol3et1gdZk1rm3ag8lZ00I",
+      "domain": ".x.com",
+      "path": "/",
+      "expires": 1762251812.240123,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "lang",
+      "value": "ja",
+      "domain": "x.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "twid",
+      "value": "u%3D1849156184479051776",
+      "domain": ".x.com",
+      "path": "/",
+      "expires": 1793701423.181185,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "IDE",
+      "value": "AHWqTUlDDvtaJItQaBzhYY0XwmwjeagwZEbEblebJOsIFxTdQ27Wefu25xm9iJEdFlk",
+      "domain": ".doubleclick.net",
+      "path": "/",
+      "expires": 1796725413.633055,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "__cf_bm",
+      "value": "UO19esLx668aoBawbsnfKsx2hJFdGZWyZul4OgiuydA-1762165421.7599983-1.0.1.1-bSOBzv.9ivFwvBXTwTdVUPm5MgkLIQW30aTPbLGY3wJI4azNiHelXlHgWr_IYHKPFB0Xwri6RYpRMhLQX7wupkFHuuRzwM2IdpM7l4xftlfBrDp6ZXW8yWHfsdizi0e7",
+      "domain": ".twitter.com",
+      "path": "/",
+      "expires": 1762167222.900486,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "__cf_bm",
+      "value": "lhguXmlQX7CndusKd5RiOESG73MkjOjrLXrVn11cxXs-1762165421.9075327-1.0.1.1-.imcF.tyMjcgT0mFc4AytsCQf6qIL3wxvEgRxSJCh053o6qHDu.fdgBCI5B0rxL1E.gvDHH0YWAuJ8ihWQpyYVwo_S7hSGif6T4pzFRUAOkWPI_91w5rCMmOr6Dk6iKD",
+      "domain": ".x.com",
+      "path": "/",
+      "expires": 1762167223.181213,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "https://x.com",
+      "localStorage": [
+        {
+          "name": "__cuid",
+          "value": "da41ae0d9fa74056a50646de95b2ae9b"
+        }
+      ]
+    }
+  ]
+}
