@@ -9,4 +9,5 @@ COPY src ./src
 RUN npx tsc
 ENV PORT=8080
 EXPOSE 8080
-CMD ["node", "dist/src/server.js"]
+CMD ["node", "dist/server.js"]
+
