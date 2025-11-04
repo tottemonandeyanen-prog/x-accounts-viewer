@@ -25,6 +25,28 @@ const s3 = new S3Client({
   }
 });
 
+import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+
+export async function getObjectTextFromR2(key) {
+  const resp = await s3.send(new GetObjectCommand({
+    Bucket: R2_BUCKET,
+    Key: key
+  }));
+  if (!resp.Body) return null;
+  const text = await resp.Body.transformToString();
+  return text;
+}
+
+export async function putObjectToR2(key, body, contentType = "application/octet-stream") {
+  await s3.send(new PutObjectCommand({
+    Bucket: R2_BUCKET,
+    Key: key,
+    Body: body,
+    ContentType: contentType,
+    CacheControl: "public, max-age=60"
+  }));
+}
+
 export async function uploadToR2(Key, Body, ContentType = "image/jpeg") {
   await s3.send(new PutObjectCommand({
     Bucket: R2_BUCKET,
