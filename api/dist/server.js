@@ -8,27 +8,18 @@ const app = express();
 
 // ---- ✅ CORS：最小構成で確実に通す ----
 const FRONT_ORIGIN = "*";
-// ---- CORS（超シンプル・確実版）+ 誰が返したか分かる印 ----
-const BUILD_TAG = process.env.RENDER_GIT_COMMIT || "local";
 app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Origin", FRONT_ORIGIN);
+  res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.setHeader("X-Debug-CORS", `ok:${BUILD_TAG}`); // ← これが見えたら“このserver.jsが走っている”証拠
-  if (req.method === "OPTIONS") return res.sendStatus(204);
+  if (req.method === "OPTIONS") return res.sendStatus(204); // ← ここが最重要
   next();
 });
+app.use(express.json());
 
-// ランタイム自己診断エンドポイント
-app.get("/_whoami", (_req, res) => {
-  res.json({
-    build: BUILD_TAG,
-    cwd: process.cwd(),
-    main: process.argv[1],
-    dirname: new URL(".", import.meta.url).pathname,
-    now: new Date().toISOString(),
-  });
-});
+// ---- health check ----
+app.get("/healthz", (_req, res) => res.send("ok"));
 
 // ---- データ処理 ----
 const LIST_KEY = "accounts/_list.json";

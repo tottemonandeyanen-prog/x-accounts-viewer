@@ -9,17 +9,24 @@
   <script>
     // ローカルAPIでテストする間
     window.API_BASE = "https://x-accounts-viewer.onrender.com";
+    //window.API_BASE = "http://localhost:8080";
     // R2公開URL
     window.R2_PUBLIC_HOST = "https://pub-6f709a4b568e4d1d91bc44f178701b86.r2.dev";
   </script>
 </head>
 <body>
-  <aside class="toolbar">
-    <input id="handles" placeholder="@a,@b,@c（カンマ区切り）" />
-    <button id="btn-add">アカウント追加</button>
-    <button id="btn-refresh">更新</button>
-  </aside>
+  <div class="sticky-top">
+    <aside class="toolbar">
+      <input id="handles" placeholder="@a,@b,@c（カンマ区切り）" />
+      <button id="btn-add">アカウント追加</button>
+      <button id="btn-refresh">更新</button>
+    </aside>
 
+    <!-- 上部の横スクロールバー -->
+    <div id="hscroll" class="hscroll" aria-hidden="true">
+      <div class="hscroll-spacer"></div>
+    </div>
+  </div>
   <main id="capture-root" class="board" aria-live="polite"></main>
 
   <!-- プログレスバー -->

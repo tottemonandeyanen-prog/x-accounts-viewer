@@ -1,4 +1,10 @@
-import { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  GetObjectCommand,
+  PutObjectCommand,
+  ListObjectsV2Command,
+  DeleteObjectsCommand,
+} from "@aws-sdk/client-s3";
 
 const {
   R2_ENDPOINT,
@@ -24,8 +30,6 @@ const s3 = new S3Client({
     secretAccessKey: R2_SECRET_ACCESS_KEY
   }
 });
-
-import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 
 export async function getObjectTextFromR2(key) {
   const resp = await s3.send(new GetObjectCommand({

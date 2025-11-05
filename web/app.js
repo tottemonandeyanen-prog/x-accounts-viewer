@@ -52,9 +52,76 @@ if (m) {
 } else {
   // ========== ビューアモード (/) ==========
   let isRefreshing = false;
-  const state = { handles: new Set(JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]")) };
+  const state = { handles: new Set() };
   const board = document.getElementById("capture-root");
   const tpl = document.getElementById("col-tpl");
+
+  const hscroll = document.getElementById("hscroll");
+  const hSpacer = hscroll?.querySelector(".hscroll-spacer");
+
+  // board と上部バーのスクロールを双方向同期
+  let _syncing = false;
+  function syncScrollFromBoard() {
+    if (_syncing) return;
+    _syncing = true;
+    hscroll.scrollLeft = board.scrollLeft;
+    _syncing = false;
+  }
+  function syncScrollFromTop() {
+    if (_syncing) return;
+    _syncing = true;
+    board.scrollLeft = hscroll.scrollLeft;
+    _syncing = false;
+  }
+  if (hscroll) {
+    board.addEventListener("scroll", syncScrollFromBoard, { passive: true });
+    hscroll.addEventListener("scroll", syncScrollFromTop, { passive: true });
+  }
+
+  // board の内容幅に合わせて上部バーの幅（=スペーサー）を更新
+  function syncHScrollWidth() {
+    if (!hSpacer) return;
+    // board.scrollWidth は“全列の合計幅”
+    hSpacer.style.width = board.scrollWidth + "px";
+  }
+  window.addEventListener("resize", syncHScrollWidth);
+
+
+  async function fetchAccounts() {
+    // 1) API（正規ルート）
+    try {
+      if (apiBase) {
+        const r = await fetch(`${apiBase}/accounts`, { cache: "no-store" });
+        if (r.ok) {
+          const j = await r.json();
+          if (Array.isArray(j.accounts)) return j.accounts;
+        }
+      }
+    } catch (e) {
+      console.warn("[fetchAccounts] API fallback:", e?.message || e);
+    }
+
+    // 2) R2 公開JSON（APIが落ちてても全端末で共有できる）
+    try {
+      if (r2Host) {
+        const r = await fetch(`${r2Host}/accounts/_list.json?ts=${Date.now()}`, { cache: "no-store" });
+        if (r.ok) {
+          const arr = await r.json();
+          if (Array.isArray(arr)) return arr;
+        }
+      }
+    } catch (e) {
+      console.warn("[fetchAccounts] R2 fallback:", e?.message || e);
+    }
+
+    // 3) 最後の手段：各端末の localStorage
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    } catch {
+      return [];
+    }
+  }
+
 
   // ========== Progress Helper ==========
 const progress = (() => {
@@ -122,12 +189,13 @@ const progress = (() => {
       h2.innerHTML = "";
       h2.appendChild(a);
       const profileImg = node.querySelector(".profile");
-      profileImg.onload = profileImg.onerror = () => progress.inc();
+      const bump = () => { progress.inc(); syncHScrollWidth(); };
+      profileImg.onload = profileImg.onerror = bump;
       profileImg.src = r2Url(h, "profile") + `?v=${bust}`;
       const posts = node.querySelectorAll(".posts img");
       [1,2,3].forEach((i, idx) => {
         const img = posts[idx];
-        img.onload = img.onerror = () => progress.inc();
+        img.onload = img.onerror = bump;
         img.src = r2Url(h, `posts/${i}`) + `?v=${bust}`;
       });
       // 削除ボタンの動作：ローカル一覧から削除 + サーバーへR2削除を依頼
@@ -137,24 +205,54 @@ const progress = (() => {
         if (!ok) return;
         try {
           if (!apiBase) throw new Error("API_BASE が未設定です");
-          await fetch(`${apiBase}/accounts/${user}`, { method: "DELETE" });
+
+          // DELETE実行
+          const res = await fetch(`${apiBase}/accounts/${user}`, { method: "DELETE" });
+          if (!res.ok) throw new Error("サーバー削除失敗");
+          const j = await res.json();
+
+          // R2キャッシュ遅延を回避するために、ローカルstateを即時更新
+          state.handles.delete(`@${user}`);
+
+          // UI更新
+          save();
+          render();
+
+          // R2の最新リストも非同期で反映（キャッシュバスター付き）
+          setTimeout(async () => {
+            const latest = await fetchAccounts();
+            state.handles = new Set(latest);
+            save(); render();
+          }, 2000);
         } catch (e) {
-          alert(`R2削除でエラー: ${e?.message || e}`);
-        } finally {
-          // ローカルの列は確実に消す
-          state.handles.delete(h);
-          save(); render();
+          alert(`削除でエラー: ${e?.message || e}`);
         }
       };
 
+
       board.appendChild(node);
     });
+    syncHScrollWidth();
+    if (hscroll) hscroll.scrollLeft = board.scrollLeft;
   }
 
-  document.getElementById("btn-add").onclick = () => {
+  document.getElementById("btn-add").onclick = async () => {
     const raw = document.getElementById("handles").value.trim();
-    raw.split(",").map(s => s.trim()).filter(Boolean).forEach(h => state.handles.add(h));
-    save(); render();
+    const handles = raw.split(",").map(s => s.trim()).filter(Boolean);
+    if (handles.length === 0) return;
+    try {
+      if (!apiBase) throw new Error("API_BASE が未設定です");
+      await fetch(`${apiBase}/accounts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ handles })
+      });
+      const latest = await fetchAccounts();
+      state.handles = new Set(latest);
+      save(); render();
+    } catch (e) {
+      alert(`追加に失敗しました: ${e?.message || e}`);
+    }
   };
 
   document.getElementById("btn-refresh").onclick = async () => {
@@ -188,5 +286,11 @@ const progress = (() => {
     }
   };
 
-  render();
+  // サーバー一覧を読み込んでから描画
+  (async () => {
+    const list = await fetchAccounts();
+    state.handles = new Set(list);
+    save();
+    render();
+  })();
 }
