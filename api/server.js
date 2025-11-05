@@ -19,6 +19,22 @@ app.use((req, res, next) => {
 app.use(express.json());
 
 // ---- health check ----
+// --- debug: chromium インストール確認 ---
+app.get("/playwrightz", async (_req, res) => {
+  try {
+    const { chromium } = await import("playwright");
+    const b = await chromium.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-dev-shm-usage"]
+    });
+    const v = b.version();
+    await b.close();
+    res.send(`ok: chromium ${v}  at ${process.env.PLAYWRIGHT_BROWSERS_PATH || "(no path)"}`);
+  } catch (e) {
+    res.status(500).send(`ng: ${e?.message || e}`);
+  }
+});
+
 app.get("/healthz", (_req, res) => res.send("ok"));
 
 // ---- データ処理 ----
