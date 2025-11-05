@@ -6,7 +6,7 @@
     "dev": "ts-node-esm src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "postinstall": "npx playwright install chromium"   // ← root権限不要に修正済み
+    "postinstall": "npx playwright install chromium"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.922.0",
