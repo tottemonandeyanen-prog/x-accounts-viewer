@@ -49,11 +49,16 @@ app.get("/healthz", (_req, res) => res.send("ok"));
 /* ---- 診断ルート: Playwright キャッシュの中身を見る ---- */
 app.get("/diag/playwright", (_req, res) => {
   try {
-    const base = process.env.PLAYWRIGHT_BROWSERS_PATH || "";
-    const p = base || "/opt/render/.cache/ms-playwright";
-    const exists = fs.existsSync(p);
-    const list = exists ? fs.readdirSync(p) : [];
-    res.json({ base: p, exists, list });
+    const cachePath = process.env.PLAYWRIGHT_BROWSERS_PATH || "/opt/render/.cache/ms-playwright";
+    const bundled = "node_modules/playwright/.local-browsers";
+    const existsCache = fs.existsSync(cachePath);
+    const listCache = existsCache ? fs.readdirSync(cachePath) : [];
+    const existsBundled = fs.existsSync(bundled);
+    const listBundled = existsBundled ? fs.readdirSync(bundled) : [];
+    res.json({
+      cachePath, existsCache, listCache,
+      bundled, existsBundled, listBundled
+    });
   } catch (e) {
     res.status(500).json({ error: e?.message || String(e) });
   }
