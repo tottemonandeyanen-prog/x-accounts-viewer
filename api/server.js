@@ -158,14 +158,3 @@ app.delete("/accounts/:handle", async (req, res) => {
 /* ---- 起動 ---- */
 const port = Number(process.env.PORT || 8080);
 app.listen(port, () => console.log(`API on :${port}`));
-
-import { execSync } from "node:child_process";
-try {
-  console.log("🧩 Checking Playwright browser at runtime...");
-  execSync("PLAYWRIGHT_BROWSERS_PATH=0 PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=1 npx playwright install chromium --force", {
-    stdio: "inherit",
-  });
-  console.log("✅ Chromium installed at runtime.");
-} catch (e) {
-  console.error("⚠️ Chromium install at runtime failed:", e.message);
-}
