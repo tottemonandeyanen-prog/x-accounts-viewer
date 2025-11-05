@@ -1,14 +1,27 @@
 import express from "express";
-import cors from "cors";
 import pLimit from "p-limit";
+import cors from "cors";
 import { refreshHandle } from "./scrape.js";
 import { deletePrefixFromR2, getObjectTextFromR2, putObjectToR2 } from "./r2.js";
 
 const app = express();
-app.use(cors({ origin: true }));
+
+// ---- ✅ CORS：最小構成で確実に通す ----
+const FRONT_ORIGIN = "*";
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", FRONT_ORIGIN);
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (req.method === "OPTIONS") return res.sendStatus(204); // ← ここが最重要
+  next();
+});
 app.use(express.json());
 
-// R2上に保存する“正”のアカウント一覧
+// ---- health check ----
+app.get("/healthz", (_req, res) => res.send("ok"));
+
+// ---- データ処理 ----
 const LIST_KEY = "accounts/_list.json";
 
 async function readList() {
@@ -23,15 +36,13 @@ async function writeList(arr) {
   await putObjectToR2(LIST_KEY, JSON.stringify(arr, null, 2), "application/json");
 }
 
-app.get("/healthz", (_, res) => res.send("ok"));
-
 // 一覧取得
 app.get("/accounts", async (_req, res) => {
   const list = await readList();
   res.json({ accounts: list });
 });
 
-// 追加（単体/複数どちらでも OK）
+// 追加
 app.post("/accounts", async (req, res) => {
   try {
     const handles = req.body?.handles;
@@ -41,8 +52,7 @@ app.post("/accounts", async (req, res) => {
       .map(h => (h.startsWith("@") ? h : `@${h}`));
 
     const current = await readList();
-    const set = new Set(current.concat(items));
-    const next = Array.from(set);
+    const next = Array.from(new Set(current.concat(items)));
     await writeList(next);
     res.json({ ok: true, accounts: next });
   } catch (e) {
@@ -50,6 +60,7 @@ app.post("/accounts", async (req, res) => {
   }
 });
 
+// 更新
 app.get("/refresh", async (req, res) => {
   try {
     const raw = String(req.query.handles || "").trim();
@@ -58,7 +69,6 @@ app.get("/refresh", async (req, res) => {
     const handles = raw.split(",")
       .map(s => s.trim().replace(/^@/, ""))
       .filter(Boolean);
-    console.log("[/refresh] handles:", handles);
     const limit = pLimit(Number(process.env.CONCURRENCY ?? 6));
     const jobs = handles.map(h => limit(() => refreshHandle(h)));
     const results = await Promise.allSettled(jobs);
@@ -76,7 +86,7 @@ app.get("/refresh", async (req, res) => {
   }
 });
 
-// 例: DELETE /accounts/akiko_lawson で accounts/akiko_lawson/ を丸ごと削除
+// 削除
 app.delete("/accounts/:handle", async (req, res) => {
   try {
     const handle = String(req.params.handle || "").trim().replace(/^@/, "");
@@ -92,5 +102,6 @@ app.delete("/accounts/:handle", async (req, res) => {
   }
 });
 
+// ---- サーバ起動 ----
 const port = Number(process.env.PORT || 8080);
 app.listen(port, () => console.log(`API on :${port}`));
