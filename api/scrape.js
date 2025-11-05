@@ -8,6 +8,14 @@ const CAPTURE_TIMEOUT = Number(process.env.CAPTURE_TIMEOUT_MS ?? 60000);
 
 // 環境変数
 const UI_BASE = process.env.UI_BASE?.replace(/\/+$/, ""); // 例: http://localhost:5173
+const UI_PATH_TMPL = (process.env.UI_PATH_TMPL || "/accounts/@{handle}").trim();
+const ALT_WAIT_SELECTORS = [
+  "#profile-header",               // 推奨
+  "#capture-root",                 // 旧実装
+  "#post-1",                       // 投稿カードが先に出る場合
+  "[data-testid='profile-header']",
+  "[data-capture-root]"
+];
 const SELECTOR_PROFILE = (process.env.SELECTOR_PROFILE ?? "").trim(); // 自作UIの #profile-header 等
 const SELECTOR_TWEET   = (process.env.SELECTOR_TWEET ?? 'article[data-testid="tweet"]').trim();
 

@@ -2,7 +2,14 @@ import express from "express";
 import pLimit from "p-limit";
 import fs from "node:fs";
 import path from "node:path";
-
+const UI_PATH_TMPL = (process.env.UI_PATH_TMPL || "/accounts/@{handle}").trim();
+const ALT_WAIT_SELECTORS = [
+  "#profile-header",              // 推奨（あれば最優先）
+  "#capture-root",                // 旧実装
+  "#post-1",
+  "[data-testid='profile-header']",
+  "[data-capture-root']"
+];
 /* ---- 予期せぬ例外でプロセスが落ちないように ---- */
 process.on("uncaughtException", (e) => {
   console.error("[uncaughtException]", e);
