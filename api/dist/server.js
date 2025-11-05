@@ -8,11 +8,13 @@ const app = express();
 
 // ---- ✅ CORS：最小構成で確実に通す ----
 const FRONT_ORIGIN = "*";
+const BUILD_TAG = process.env.RENDER_GIT_COMMIT || "local";
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", FRONT_ORIGIN);
   res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("X-Debug-CORS", `ok:${BUILD_TAG}`);
   if (req.method === "OPTIONS") return res.sendStatus(204); // ← ここが最重要
   next();
 });
