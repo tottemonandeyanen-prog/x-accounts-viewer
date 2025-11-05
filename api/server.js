@@ -13,6 +13,24 @@ process.on("unhandledRejection", (e) => {
 
 const app = express();
 
+// ---- 一時: Chromiumをその場で入れる管理ルート（あとで削除推奨） ----
+app.post("/admin/install-chromium", async (_req, res) => {
+  try {
+    const { exec } = await import("node:child_process");
+    const cache = process.env.PLAYWRIGHT_BROWSERS_PATH || "/opt/render/.cache/ms-playwright";
+    exec(
+      `PLAYWRIGHT_BROWSERS_PATH=${cache} npx playwright install chromium --with-deps --force`,
+      { env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: cache } },
+      (err, stdout, stderr) => {
+        if (err) return res.status(500).send(stderr || String(err));
+        res.send(stdout || "ok");
+      }
+    );
+  } catch (e) {
+    res.status(500).send(String(e));
+  }
+});
+
 /* ---- CORS & JSON ---- */
 app.use((req, res, next) => {
   const origin = req.headers.origin || "*";

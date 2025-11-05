@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "postinstall": "npx playwright install chromium"
+    "postinstall": "PLAYWRIGHT_BROWSERS_PATH=/opt/render/.cache/ms-playwright npx playwright install chromium --with-deps --force"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.922.0",
