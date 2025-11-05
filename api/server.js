@@ -18,14 +18,14 @@ app.post("/admin/install-chromium", async (_req, res) => {
   try {
     const { exec } = await import("node:child_process");
     const cache = process.env.PLAYWRIGHT_BROWSERS_PATH || "/opt/render/.cache/ms-playwright";
-    exec(
-      `PLAYWRIGHT_BROWSERS_PATH=${cache} npx playwright install chromium --with-deps --force`,
-      { env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: cache } },
-      (err, stdout, stderr) => {
-        if (err) return res.status(500).send(stderr || String(err));
-        res.send(stdout || "ok");
-      }
-    );
+    const cmd =
+      `PLAYWRIGHT_BROWSERS_PATH=${cache} ` +
+      `PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=1 ` +
+      `npx playwright install chromium --force`;
+    exec(cmd, { env: { ...process.env } }, (err, stdout, stderr) => {
+      if (err) return res.status(500).send(stderr || String(err));
+      res.send(stdout || "ok");
+    });
   } catch (e) {
     res.status(500).send(String(e));
   }
