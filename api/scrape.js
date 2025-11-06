@@ -81,11 +81,10 @@ export async function refreshShot(handle, shot) {
   try {
     ctx = await newContext();
     const page = await ctx.newPage();
-    await gotoProfile(page, handle); // UIでもX本体でも同じ入口
-
     if (shot === "profile") {
-      await captureProfile(page, handle);
+      await captureProfile(page, handle);     // captureProfile 内で gotoProfile する
     } else {
+      await gotoProfile(page, handle);         // post撮影は事前にナビが必要
       const m = /^post-(\d+)$/.exec(shot);
       const idx = m ? Math.max(0, Math.min(2, parseInt(m[1], 10) - 1)) : 0;
       await capturePost(page, handle, idx);
@@ -95,7 +94,6 @@ export async function refreshShot(handle, shot) {
     return { ok: false, error: String(e?.message || e) };
   } finally {
     try { await ctx?.close(); } catch {}
-    try { await ctx?.browser()?.close(); } catch {}
   }
 }
 
@@ -158,6 +156,37 @@ function unionRect(rects, padding = 8) {
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
 }
 
+// 追加：まとめ並列更新（server.js からここを呼ぶ）
+export async function refreshMany(handles = []) {
+  const list = (handles || []).map(h => String(h || "").trim()).filter(Boolean);
+  if (!list.length) return [];
+
+  const max = Math.max(1, Number(process.env.CONCURRENCY ?? 2)); // Render Free なら 2〜3推奨
+  const queue = [];
+  let i = 0;
+
+  const run = async () => {
+    while (i < list.length) {
+      const idx = i++;
+      const handle = list[idx];
+      try {
+        // 各アカウントを「1ナビ→4枚撮影」で完了
+        const res = await refreshHandle(handle);
+        queue.push(res);
+      } catch (e) {
+        queue.push({ handle, ok: false, error: String(e?.message || e) });
+      }
+    }
+  };
+
+  // max 並列で走らせる
+  await Promise.all(Array.from({ length: max }, run));
+
+  // すべて終わったら（必要なら）明示的にブラウザを閉じる
+  try { const b = await getBrowser(); await b?.close(); } catch {}
+  return queue;
+}
+
 async function screenshotUnion(page, selectors, { pad = 12 } = {}) {
   const boxes = [];
   for (const sel of selectors) {
@@ -186,23 +215,41 @@ async function screenshotUnion(page, selectors, { pad = 12 } = {}) {
   return await toJpeg(png);
 }
 
+// 置換：newContext()
 async function newContext() {
   const storage = process.env.PLAYWRIGHT_STORAGE_STATE;
-  const browser = await getBrowser(); // ← 毎回起動しない！
+  const browser = await getBrowser(); // ← 毎回起動しない（共有）
   const viewport = {
     width:  Number(process.env.VIEWPORT_W ?? 1200),
     height: Number(process.env.VIEWPORT_H ?? 1800),
   };
   const ctx = await browser.newContext({
     viewport,
+    // 軽いモバイルUA（XのDOMが安定＆軽量）
     userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
     ...(storage ? { storageState: JSON.parse(storage) } : {})
   });
-  // ナビ・待機の上限は短め（Renderの100sより十分短く）
-  ctx.setDefaultTimeout(Number(process.env.CAPTURE_TIMEOUT_MS ?? 70000));
+
+  // 重いリソースをブロック（画像は通す）
+  await ctx.route("**/*", (route) => {
+    const r = route.request();
+    const type = r.resourceType();
+    // 速度を落とす代表格を止める
+    if (type === "media" || type === "font" || type === "websocket" || type === "eventsource") {
+      return route.abort();
+    }
+    // analytics・ads など三者ドメインも遮断
+    const url = r.url();
+    if (/\b(analytics|doubleclick|adsystem|advertising|scribe|metrics)\b/i.test(url)) {
+      return route.abort();
+    }
+    return route.continue();
+  });
+
+  // デフォルトの待ち上限（短め）
+  ctx.setDefaultTimeout(Number(process.env.CAPTURE_TIMEOUT_MS ?? 60000));
   return ctx;
 }
-
 
 async function toJpeg(pngBuf) {
   return await sharp(pngBuf)
@@ -250,20 +297,10 @@ async function gotoProfile(page, handle) {
   await page.setViewportSize({ width: VIEWPORT_W, height: VIEWPORT_H });
   await page.context().setExtraHTTPHeaders({ "Accept-Language": "ja,en-US;q=0.9,en;q=0.8" });
 
-  // できるだけ軽く：広告・解析・動画を止める
-  await page.route('**/*', route => {
-    const u = route.request().url();
-    if (/doubleclick|googletagmanager|google-analytics|analytics\.twitter|branch\.io|sentry\.io/i.test(u)) return route.abort();
-    if (/\/i\/adsct|ads-api\.twitter\.com/i.test(u)) return route.abort();
-    if (/\.mp4(\?.*)?$|\.m3u8(\?.*)?$|\/amplify_video\//i.test(u)) return route.abort();
-    route.continue();
-  });
-
   // X本体へ遷移
-  const url = `https://mobile.twitter.com/${user}?lang=ja`;
+  const url = `https://x.com/${user}`;
   console.log("[capture:url]", url);
-  // 初期表示だけ待つ（長い待機をやめる）
-  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout: CAPTURE_TIMEOUT });
 
   // ログイン壁・チャレンジ検知
   const cur = page.url();
@@ -272,8 +309,9 @@ async function gotoProfile(page, handle) {
   }
 
   // 追加の安定化（読み込みとレイアウト落ち着き待ち）
+  await page.waitForLoadState("networkidle", { timeout: 60000 }).catch(()=>{});
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.waitForTimeout(250);  // 軽く待つだけ
+  await page.waitForTimeout(800);
 
   // どれかが見えたらOK（A/Bテスト差分に強い）
   const profileSelectors = [
@@ -302,10 +340,8 @@ async function gotoProfile(page, handle) {
     }
   };
 
-  const seen =
-    (await anyVisible(profileSelectors, 8000).catch(()=>null)) ||
-    (await anyVisible(postSelectors, 8000).catch(()=>null));
-  if (!seen) console.warn("[gotoProfile] no key selector in 16s, will fallback at capture.");
+  try { await anyVisible(profileSelectors, 60000); }
+  catch { await anyVisible(postSelectors, 60000); }
 }
 
 // ====== 撮影 ======
@@ -436,14 +472,13 @@ async function captureLatestPosts(page, handle) {
   }
 }
 
+// 置換：refreshHandle（finally から browser close を削除）
 export async function refreshHandle(handle) {
-  // この関数は絶対にthrowしない
   const maxRetry = 2;
   let lastErr;
   for (let attempt = 1; attempt <= maxRetry; attempt++) {
     let ctx;
     try {
-      // ★ newContext() も try 内に入れて例外を捕まえる
       ctx = await newContext();
       const page = await ctx.newPage();
       await captureProfile(page, handle);
@@ -453,19 +488,15 @@ export async function refreshHandle(handle) {
       lastErr = e;
       const msg = String(e?.message || e);
       const transient =
-        /Target .* (closed|crashed)|Navigation failed|Execution context was destroyed/i.test(
-          msg
-        );
+        /Target .* (closed|crashed)|Navigation failed|Execution context was destroyed/i.test(msg);
       if (!transient || attempt === maxRetry) {
-        // ここで終わるが throw はしない
         return { handle, ok: false, error: msg };
       }
-      await new Promise((r) => setTimeout(r, 1200)); // 短いリトライ待ち
+      await new Promise((r) => setTimeout(r, 800));
     } finally {
       try { await ctx?.close(); } catch {}
-      try { await ctx?.browser()?.close(); } catch {}
+      // ← ここで browser は閉じない！
     }
   }
-  // 念のため（来ない想定）
   return { handle, ok: false, error: String(lastErr || "refreshHandle failed") };
 }
