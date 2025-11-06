@@ -156,12 +156,20 @@ app.get("/refresh", async (req, res) => {
         const resp = await page.goto(url, { waitUntil: 'domcontentloaded', timeout });
         console.log('[goto]', url, resp?.status());
 
-        await page.waitForSelector('body[data-ready="1"]', { timeout }); // まずUI側のonloadマーカー
-        await page.waitForSelector(profileSel, { timeout, state: 'visible' });
-        await page.waitForSelector(postSelectors[0], { timeout, state: 'visible' });
-        await page.waitForSelector(`body[data-ready="1"], ${profileSel}, ${postSelectors[0]}`, { timeout });
-        // セレクタが出るまで待つ（プロフィール or 最初の投稿）
-        await page.waitForSelector(`${profileSel}, ${postSelectors[0]}`, { timeout });
+        // ❶ readyマーカーは「存在」だけ5秒待つ（無くても続行）
+        try {
+          await page.waitForSelector('body[data-ready="1"]', { timeout: 5000 });
+          console.log('[wait] ready marker ok');
+        } catch {
+          console.log('[wait] ready marker missed (continue)');
+        }
+
+        // ❷ プロフィールと最初の投稿も「存在（attached）」だけを待つ
+        await page.waitForSelector(profileSel, { timeout });
+        console.log('[wait] profile found');
+        await page.waitForSelector(postSelectors[0], { timeout });
+        console.log('[wait] post-1 found');
+
 
         // プロフィール
         try {
