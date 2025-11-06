@@ -117,49 +117,59 @@ app.delete("/accounts/:handle", async (req, res) => {
 
 // ===== 撮影（絶対にthrowしない）=====
 // ===== 撮影（絶対にthrowしない）=====
+// ===== 撮影（throwしない）=====
 app.get("/refresh", async (req, res) => {
   try {
+    // 1) ハンドル配列を作成
     const handles = String(req.query.handles || "")
-      .split(",").map(s => s.trim()).filter(Boolean);
-    if (!handles.length) return res.json({ ok: true, results: [] });
+      .split(",")
+      .map(s => s.trim())
+      .filter(Boolean);
+    if (!handles.length) {
+      return res.json({ ok: true, results: [] });
+    }
 
-    const BATCH = Math.max(1, parseInt(process.env.CONCURRENCY || "2", 10)); // 並行数
-    const TIME_BUDGET_MS = 85_000; // 全体の安全上限
-    const started = Date.now();
+    // 2) 並列数（チャンク幅）
+    const BATCH = Math.max(1, parseInt(process.env.CONCURRENCY || "2", 10));
 
+    // 3) チャンク並列で全件確実に回す（総時間上限は無し）
     const results = [];
     for (let i = 0; i < handles.length; i += BATCH) {
-      // 予算を超えそうなら打ち切り
-      if (Date.now() - started > TIME_BUDGET_MS) {
-        results.push(...handles.slice(i).map(h => ({
-          handle: h.startsWith("@") ? h : `@${h}`,
-          ok: false,
-          error: "time budget exceeded",
-          shots: []
-        })));
-        break;
-      }
-      const chunk = handles.slice(i, i + BATCH).map(raw => raw.replace(/^@/, ""));
-      // 各ハンドルを並行実行（refreshHandle は throw しない設計）
+      const chunk = handles.slice(i, i + BATCH).map(h => h.replace(/^@/, "")); // "@xxx" → "xxx"
+
+      // refreshHandle は throw しない前提。念のため allSettled でガード
       const settled = await Promise.allSettled(chunk.map(h => refreshHandle(h)));
+
       for (let j = 0; j < settled.length; j++) {
         const h = chunk[j];
-        const r = settled[j].status === "fulfilled" ? settled[j].value
-                                                    : { ok:false, error:String(settled[j].reason||"failed") };
-        results.push({
-          handle: `@${h}`,
-          ok: !!r.ok,
-          error: r.ok ? undefined : r.error,
-          shots: r.ok ? ["profile","post-1","post-2","post-3"] : [],
-        });
+        const s = settled[j];
+
+        if (s.status === "fulfilled") {
+          const r = s.value || {};
+          results.push({
+            handle: `@${h}`,
+            ok: !!r.ok,
+            error: r.ok ? undefined : r.error,
+            shots: r.ok ? ["profile", "post-1", "post-2", "post-3"] : [],
+          });
+        } else {
+          results.push({
+            handle: `@${h}`,
+            ok: false,
+            error: String(s.reason || "failed"),
+            shots: [],
+          });
+        }
       }
     }
 
+    // 4) 完了
     res.json({ ok: true, results });
   } catch (e) {
     res.json({ ok: false, error: String(e && e.message ? e.message : e) });
   }
 });
+
 
 app.get("/refresh-shot", async (req, res) => {
   return res.status(400).json({ ok:false, error:"Use /refresh (batched & fast)" });
