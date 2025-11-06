@@ -18,6 +18,41 @@ const SELECTOR_PROFILE = (process.env.SELECTOR_PROFILE ?? 'main [data-testid="Us
 let _browserPromise = null;
 let _ctxPromise = null;
 
+// 単発の投稿1枚だけ撮る（0始まりインデックス）
+async function capturePostNth(page, handle, index) {
+  index = Math.max(0, Math.min(2, Number.isFinite(index) ? index : 0)); // 0..2
+  // 投稿だけ撮る場合はここでナビ（profile撮影はcaptureProfileの中でナビするため二重にならない）
+  await gotoProfile(page, handle);
+  let jpg;
+  try {
+    jpg = await screenshotByLocator(page, `${SELECTOR_TWEET} >> nth=${index}`);
+  } catch {
+    jpg = await screenshotFull(page);
+  }
+  await uploadToR2(`accounts/${handle}/posts/${index + 1}.jpg`, jpg, "image/jpeg");
+}
+
+// /refresh-shot 用：プロフィール または post-N を1枚だけ撮る
+export async function refreshShot(handle, shot = "profile") {
+  const ctx = await getSharedContext();
+  const page = await ctx.newPage();
+  try {
+    if (shot === "profile") {
+      // captureProfile 内で gotoProfile するので二重ナビ回避のためここでは呼ばない
+      await captureProfile(page, handle);
+    } else {
+      const m = /^post-(\d+)$/.exec(String(shot));
+      const idx = m ? parseInt(m[1], 10) - 1 : 0; // post-1 → 0
+      await capturePostNth(page, handle, idx);
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e?.message || e) };
+  } finally {
+    await page.close().catch(() => {});
+  }
+}
+
 async function getSharedContext() {
   if (!_ctxPromise) {
     _ctxPromise = (async () => {
