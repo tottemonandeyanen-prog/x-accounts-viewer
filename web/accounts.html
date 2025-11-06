@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>Account</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <!-- 撮影ターゲット -->
+  <section id="profile-header"></section>
+  <article id="post-1" class="post"></article>
+  <article id="post-2" class="post"></article>
+  <article id="post-3" class="post"></article>
+
+  <script src="/app.js"></script>
+  <script>
+  (function () {
+    // パス /accounts/@handle からハンドルを取り出す
+    const segs = location.pathname.split('/').filter(Boolean);
+    const raw = segs[1] || '';                // segs[0]="accounts", segs[1]="@akiko_lawson"
+    const handle = raw.startsWith('@') ? raw : '@' + raw;
+
+    // 必要ならここでUI描画（例として見出しだけ）
+    document.querySelector('#profile-header').textContent = handle + ' のプロフィール';
+    document.querySelector('#post-1').textContent = '最新ポスト1';
+    document.querySelector('#post-2').textContent = '最新ポスト2';
+    document.querySelector('#post-3').textContent = '最新ポスト3';
+  })();
+  </script>
+</body>
+</html>
