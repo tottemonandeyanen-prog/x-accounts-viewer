@@ -2,32 +2,34 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <title>Account</title>
+  <title>Account Page</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <link rel="icon" href="/favicon.ico" />
   <link rel="stylesheet" href="/styles.css" />
+  <style>
+    body { margin:0; padding:24px; font-family:system-ui,-apple-system,Segoe UI,Roboto; }
+    #profile-header, .post { width: 900px; margin: 0 auto 24px; border: 1px solid #ddd; padding: 16px; box-sizing: border-box; }
+  </style>
 </head>
 <body>
-  <!-- 撮影ターゲット -->
   <section id="profile-header"></section>
   <article id="post-1" class="post"></article>
   <article id="post-2" class="post"></article>
   <article id="post-3" class="post"></article>
 
-  <script src="/app.js"></script>
   <script>
-  (function () {
-    // パス /accounts/@handle からハンドルを取り出す
-    const segs = location.pathname.split('/').filter(Boolean);
-    const raw = segs[1] || '';                // segs[0]="accounts", segs[1]="@akiko_lawson"
-    const handle = raw.startsWith('@') ? raw : '@' + raw;
+    // ← ここがポイント：?handle=@xxx から取得
+    const params = new URLSearchParams(location.search);
+    const handle = params.get("handle") || "@unknown";
 
-    // 必要ならここでUI描画（例として見出しだけ）
-    document.querySelector('#profile-header').textContent = handle + ' のプロフィール';
+    document.querySelector('#profile-header').textContent = `${handle} のプロフィール`;
     document.querySelector('#post-1').textContent = '最新ポスト1';
     document.querySelector('#post-2').textContent = '最新ポスト2';
     document.querySelector('#post-3').textContent = '最新ポスト3';
-  })();
+
+    // Playwright 用：描画完了マーカー
+    window.addEventListener("load", () => {
+      document.body.setAttribute("data-ready", "1");
+    });
   </script>
 </body>
 </html>
