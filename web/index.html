@@ -1,39 +1,62 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Account Page</title>
-  <link rel="stylesheet" href="/styles.css" />
-  <style>
-    /* Playwrightの撮影サイズと揃える */
-    body { margin:0; padding:24px; font-family:system-ui,-apple-system,Segoe UI,Roboto; }
-    #profile-header, .post {
-      width: 900px;           /* ← TARGET_WIDTH=900 と一致 */
-      margin: 0 auto 24px;
-      border: 1px solid #ddd;
-      padding: 16px;
-      box-sizing: border-box;
-    }
-  </style>
+  <title>X参考アカウント一覧</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="./styles.css">
+  <script>
+    // ローカルAPIでテストする間
+    window.API_BASE = "https://x-accounts-viewer-api.onrender.com";
+    //window.API_BASE = "http://localhost:8080";
+    // R2公開URL
+    window.R2_PUBLIC_HOST = "https://pub-6f709a4b568e4d1d91bc44f178701b86.r2.dev";
+  </script>
 </head>
 <body>
-  <!-- ★Playwrightが待つID。必ずこの4つが存在すること -->
-  <section id="profile-header">Loading profile...</section>
-  <article id="post-1" class="post">Loading post 1...</article>
-  <article id="post-2" class="post">Loading post 2...</article>
-  <article id="post-3" class="post">Loading post 3...</article>
+  <div class="sticky-top">
+    <aside class="toolbar">
+      <input id="handles" placeholder="@a,@b,@c（カンマ区切り）" />
+      <button id="btn-add">アカウント追加</button>
+      <button id="btn-refresh">更新</button>
+    </aside>
 
-  <script>
-    // ★B案：?handle=@xxxxx から取得（_redirectsは不要）
-    const params = new URLSearchParams(location.search);
-    const handle = params.get("handle") || "@unknown";
+    <!-- 上部の横スクロールバー -->
+    <div id="hscroll" class="hscroll" aria-hidden="true">
+      <div class="hscroll-spacer"></div>
+    </div>
+  </div>
+  <main id="capture-root" class="board" aria-live="polite"></main>
 
-    // 表示はダミーでOK（撮影対象のIDが存在すれば十分）
-    document.getElementById("profile-header").textContent = `${handle} のプロフィール`;
-    document.getElementById("post-1").textContent = "最新ポスト1";
-    document.getElementById("post-2").textContent = "最新ポスト2";
-    document.getElementById("post-3").textContent = "最新ポスト3";
-  </script>
+  <!-- プログレスバー -->
+  <div id="progress-overlay" class="progress-overlay hide" aria-live="polite" aria-busy="true">
+    <div class="progress-card">
+      <div class="progress-title">更新中…</div>
+      <div class="progress-bar">
+        <div class="progress-fill" style="width:0%"></div>
+      </div>
+      <div class="progress-text">
+        <span id="progress-count">0</span>/<span id="progress-total">0</span>
+        （<span id="progress-perc">0</span>%）
+      </div>
+    </div>
+  </div>
+
+  <!-- テンプレート -->
+  <template id="col-tpl">
+    <section class="col">
+      <div class="col-head">
+        <h2 class="handle"></h2>
+        <button class="btn-del" title="このアカウント列を削除">削除</button>
+      </div>
+      <img class="profile" alt="">
+      <div class="posts">
+        <img alt=""><img alt=""><img alt="">
+      </div>
+    </section>
+  </template>
+
+  <script src="./app.js" type="module"></script>
 </body>
 </html>
