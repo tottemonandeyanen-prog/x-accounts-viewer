@@ -93,11 +93,15 @@ app.get("/accounts", async (_req, res) => {
 });
 
 app.post("/accounts", async (req, res) => {
-  const handle = norm.withAt(req.body?.handle || "");
-  if (!handle) return res.status(400).json({ error: "handle required" });
+  const raw = req.body?.handles ?? req.body?.handle ?? [];
+  const arr = Array.isArray(raw) ? raw : [raw];
+  const withAts = arr.map((h) => (String(h||"").trim().startsWith("@") ? String(h).trim() : `@${String(h).trim()}`))
+                     .filter(Boolean);
+
+  if (!withAts.length) return res.status(400).json({ error: "handle(s) required" });
+
   const list = await loadList();
-  list.push(handle);
-  const saved = await saveList(list);
+  const saved = await saveList([...list, ...withAts]);
   res.json({ ok: true, list: saved });
 });
 
