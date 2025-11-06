@@ -179,4 +179,16 @@ app.get("/refresh-shot", async (req, res) => {
 
 // ===== 起動（0.0.0.0でbind）=====
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, "0.0.0.0", () => console.log(`api on :${PORT}`));
+app.listen(PORT, "0.0.0.0", async () => {
+  console.log(`api on :${PORT}`);
+
+  // ---- Playwright warm-up（初回の遅さ対策）----
+  try {
+    const b = await chromium.launch({ headless: true, args: ["--no-sandbox","--disable-dev-shm-usage"] });
+    const ctx = await b.newContext({ viewport: { width: 400, height: 800 } });
+    const p = await ctx.newPage();
+    await p.goto("https://m.x.com/home", { waitUntil: "domcontentloaded", timeout: 15000 }).catch(()=>{});
+    await p.close(); await ctx.close(); await b.close();
+    console.log("[warmup] ok");
+  } catch (e) { console.log("[warmup] skip:", e?.message || e); }
+});

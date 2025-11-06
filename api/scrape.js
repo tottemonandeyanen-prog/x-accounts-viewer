@@ -94,16 +94,18 @@ async function toJpeg(buf) {
   return await sharp(buf).resize({ width: TARGET_WIDTH }).jpeg({ quality: JPEG_QUALITY }).toBuffer();
 }
 
+// 既存の screenshotByLocator を置換
 async function screenshotByLocator(page, sel) {
   const el = page.locator(sel).first();
-  await el.waitFor({ state: "visible", timeout: 8000 }).catch(()=>{});
+  await el.waitFor({ state: "visible", timeout: 5000 }).catch(()=>{});
   await el.scrollIntoViewIfNeeded().catch(()=>{});
-  await page.waitForTimeout(250);
+  await page.waitForTimeout(150); // ← 250→150 に短縮（レイアウト安定の最小待ち）
   const box = await el.boundingBox();
   if (!box || box.width < 2 || box.height < 2) throw new Error(`no valid box for ${sel}`);
   const png = await el.screenshot({ type: "png" });
   return toJpeg(png);
 }
+
 
 async function screenshotFull(page) {
   const png = await page.screenshot({ fullPage: true, type: "png" });
@@ -137,6 +139,7 @@ async function gotoProfile(page, handle) {
   await page.waitForTimeout(300);
 }
 
+// 既存の waitForAny を置換
 async function waitForAny(page, selectors, timeout = 5000) {
   const start = Date.now();
   while (Date.now() - start < timeout) {
@@ -144,10 +147,11 @@ async function waitForAny(page, selectors, timeout = 5000) {
       const el = await page.$(s);
       if (el) return s;
     }
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(100); // ← 200→100
   }
   return null;
 }
+
 
 async function captureProfile(page, handle) {
   await gotoProfile(page, handle);

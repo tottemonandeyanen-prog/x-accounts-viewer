@@ -262,8 +262,8 @@ const progress = (() => {
 
     try {
       isRefreshing = true;
-      // 画像読込で progress を進める設計なので、ここでは“総画像枚数”をセットするだけ
-      progress.open(handles.length * 4); // 1アカウント=4枚（profile+post3）
+      // 進捗バーは 1アカウント=4枚 を前提にオープン
+      progress.open(handles.length * 4);
 
       const qs = encodeURIComponent(handles.join(","));
       const url = `${apiBase}/refresh?handles=${qs}`;
@@ -272,7 +272,7 @@ const progress = (() => {
       const json = await res.json();
       console.log("refresh:", json);
 
-      // R2/CDNの反映を少し待ってから再読込
+      // R2/CDN 反映の猶予
       await new Promise(r => setTimeout(r, 1200));
       render();
     } catch (e) {
@@ -282,7 +282,6 @@ const progress = (() => {
       setTimeout(() => progress.close(), 4000);
     }
   };
-
 
 
   // サーバー一覧を読み込んでから描画
