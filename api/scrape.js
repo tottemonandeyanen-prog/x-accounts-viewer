@@ -131,12 +131,9 @@ async function newContext() {
   };
   // Context 作成時に viewport を指定する（正しいやり方）
   const ctx = await browser.newContext({
-    viewport,
-    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    locale: "ja-JP",
-    timezoneId: "Asia/Tokyo",
-    extraHTTPHeaders: { "accept-language": "ja,en;q=0.9" },
-    ...(storage ? { storageState: JSON.parse(storage) } : {})
+  viewport,
+  userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  ...(storage ? { storageState: JSON.parse(storage) } : {})
   });
   ctx.setDefaultTimeout(CAPTURE_TIMEOUT);
   return ctx;
