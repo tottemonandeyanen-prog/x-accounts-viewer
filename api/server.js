@@ -1,7 +1,7 @@
 // server.js
 import express from "express";
 import { chromium } from "playwright";
-import { refreshHandle } from "./scrape.js";
+import { refreshHandle, refreshShot } from "./scrape.js";
 import {
   getObjectTextFromR2,
   putObjectToR2,
@@ -154,6 +154,19 @@ app.get("/refresh", async (req, res) => {
     res.json({ ok: true, results });
   } catch (e) {
     res.json({ ok: false, error: String(e && e.message ? e.message : e) });
+  }
+});
+
+app.get("/refresh-shot", async (req, res) => {
+  try {
+    const handle = String(req.query.handle || "").replace(/^@/, "");
+    const shot = String(req.query.shot || "profile");
+    if (!handle) return res.status(400).json({ ok: false, error: "handle required" });
+
+    const r = await refreshShot(handle, shot); // throwしない
+    res.json({ ok: !!r.ok, handle: `@${handle}`, shot, error: r.ok ? undefined : r.error });
+  } catch (e) {
+    res.json({ ok: false, error: String(e?.message || e) });
   }
 });
 

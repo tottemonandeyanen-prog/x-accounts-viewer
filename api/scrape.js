@@ -32,6 +32,63 @@ const ALT_WAIT_SELECTORS = [
   "[data-testid='UserProfileHeader_Items']",
 ];
 
+// ★★★ scrape.js に追記（既存の import/定数群の下あたりに置いてOK） ★★★
+
+// 1枚だけ「投稿」を撮る（index: 0,1,2）
+async function capturePost(page, handle, index) {
+  if (IS_UI_MODE) {
+    const raw = (process.env.UI_POST_SELECTORS || "#post-1,#post-2,#post-3").trim();
+    let jpg;
+    if (raw.includes(",")) {
+      const sels = raw.split(",").map(s => s.trim()).filter(Boolean);
+      const sel = sels[index] || sels[sels.length - 1]; // 念のため末尾で埋め
+      try { jpg = await screenshotByLocator(page, sel); }
+      catch { jpg = await screenshotFull(page); }
+    } else {
+      const sel = `${raw} >> nth=${index}`;
+      try { jpg = await screenshotByLocator(page, sel); }
+      catch { jpg = await screenshotFull(page); }
+    }
+    const key = `accounts/${handle}/posts/${index + 1}.jpg`;
+    await uploadToR2(key, jpg, "image/jpeg");
+    return;
+  }
+
+  // === X本体モード ===
+  const baseSel = (process.env.SELECTOR_TWEET || 'article[data-testid="tweet"]').trim();
+  const targetSel = `${baseSel} >> nth=${index}`;
+  let jpg;
+  try { jpg = await screenshotByLocator(page, targetSel); }
+  catch { jpg = await screenshotFull(page); }
+  const key = `accounts/${handle}/posts/${index + 1}.jpg`;
+  await uploadToR2(key, jpg, "image/jpeg");
+}
+
+// 1枚だけ撮るためのエクスポート関数
+export async function refreshShot(handle, shot) {
+  // 絶対に throw しない
+  let ctx;
+  try {
+    ctx = await newContext();
+    const page = await ctx.newPage();
+    await gotoProfile(page, handle); // UIでもX本体でも同じ入口
+
+    if (shot === "profile") {
+      await captureProfile(page, handle);
+    } else {
+      const m = /^post-(\d+)$/.exec(shot);
+      const idx = m ? Math.max(0, Math.min(2, parseInt(m[1], 10) - 1)) : 0;
+      await capturePost(page, handle, idx);
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e?.message || e) };
+  } finally {
+    try { await ctx?.close(); } catch {}
+    try { await ctx?.browser()?.close(); } catch {}
+  }
+}
+
 async function captureProfileUnion(page, handle) {
   // 1) 最初に「何かしら」見えるまで待つ
   await waitForAny(page, ALT_WAIT_SELECTORS, 12000);

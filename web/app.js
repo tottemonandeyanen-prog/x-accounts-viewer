@@ -255,47 +255,36 @@ const progress = (() => {
     }
   };
 
-  // 刷新ボタン押下（分割実行でRenderの100秒タイムアウト回避）
   document.getElementById("btn-refresh").onclick = async () => {
     if (!apiBase) { alert("API_BASE が未設定です"); return; }
-    const handles = [...state.handles].map(stripAt).filter(Boolean);
-    if (handles.length === 0) { alert("ハンドルが空です"); return; }
+    const handles = [...state.handles].map(h => h.replace(/^@/, '')).filter(Boolean);
+    if (!handles.length) { alert("ハンドルが空です"); return; }
 
-    // 1回のHTTPに詰め込みすぎない（2〜3がオススメ）
-    const CHUNK_SIZE = 1;
-
+    const shots = ['profile','post-1','post-2','post-3'];
     try {
       isRefreshing = true;
-      progress.open(handles.length * 4);
+      progress.open(handles.length * shots.length);
 
-      // 2〜3件ずつに分割
-      const chunks = [];
-      for (let i = 0; i < handles.length; i += CHUNK_SIZE) {
-        chunks.push(handles.slice(i, i + CHUNK_SIZE));
+      for (const h of handles) {
+        for (const s of shots) {
+          const url = `${apiBase}/refresh-shot?` + new URLSearchParams({ handle: h, shot: s });
+          const res = await fetch(url, { method: 'GET', mode: 'cors', credentials: 'omit' });
+          if (!res.ok) throw new Error(`refresh-shot failed: ${res.status}`);
+          const json = await res.json();
+          console.log('refresh shot:', h, s, json);
+          progress.inc();
+          await new Promise(r => setTimeout(r, 600)); // 小休止
+        }
+        await new Promise(r => setTimeout(r, 800));   // 次アカウント前に一息
       }
 
-      // 順番に叩く
-      for (const group of chunks) {
-        const qs = new URLSearchParams({ handles: group.join(",") }).toString();
-        const url = `${apiBase}/refresh?${qs}`;
-        const res = await fetch(url, { method: "GET", mode: "cors", credentials: "omit" });
-        if (!res.ok) throw new Error(`refresh failed: ${res.status}`);
-        const json = await res.json();
-        console.log("refresh chunk:", group, json);
-
-        // ちょい待ち（R2/CDN反映 & 次バッチまでの小休止）
-        await new Promise(r => setTimeout(r, 800));
-      }
-
-      // 画像のキャッシュを更新させて再描画
-      await new Promise(r => setTimeout(r, 1000));
+      await new Promise(r => setTimeout(r, 1000));    // R2/CDN 反映待ち
       render();
-
     } catch (e) {
       alert(`更新APIエラー: ${e?.message || e}`);
     } finally {
       isRefreshing = false;
-      setTimeout(() => progress.close(), 5000);
+      setTimeout(() => progress.close(), 4000);
     }
   };
 
