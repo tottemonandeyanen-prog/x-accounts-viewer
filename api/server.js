@@ -142,8 +142,10 @@ app.get("/refresh", async (req, res) => {
       const atHandle = norm.withAt(raw);
       const noAt = norm.withoutAt(atHandle);
 
-      const url =
-        UI_BASE + UI_PATH_TMPL.replace("@{handle}", noAt); // テンプレの「@」を活かす
+      const tpl = UI_PATH_TMPL
+        .replace("{handle}", noAt)
+        .replace("@{handle}", `@${noAt}`);
+      const url = UI_BASE + tpl;
 
       const ctx = await browser.newContext({ viewport: { width, height: 1200 } });
       const page = await ctx.newPage();
@@ -151,6 +153,7 @@ app.get("/refresh", async (req, res) => {
       const one = { handle: atHandle, ok: false, shots: [] };
       try {
         await page.goto(url, { timeout });
+        await page.waitForSelector(`body[data-ready="1"], ${profileSel}, ${postSelectors[0]}`, { timeout });
         // セレクタが出るまで待つ（プロフィール or 最初の投稿）
         await page.waitForSelector(`${profileSel}, ${postSelectors[0]}`, { timeout });
 
