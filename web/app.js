@@ -260,25 +260,20 @@ const progress = (() => {
     const handles = [...state.handles].map(h => h.replace(/^@/, '')).filter(Boolean);
     if (!handles.length) { alert("ハンドルが空です"); return; }
 
-    const shots = ['profile','post-1','post-2','post-3'];
     try {
       isRefreshing = true;
-      progress.open(handles.length * shots.length);
+      // 画像読込で progress を進める設計なので、ここでは“総画像枚数”をセットするだけ
+      progress.open(handles.length * 4); // 1アカウント=4枚（profile+post3）
 
-      for (const h of handles) {
-        for (const s of shots) {
-          const url = `${apiBase}/refresh-shot?` + new URLSearchParams({ handle: h, shot: s });
-          const res = await fetch(url, { method: 'GET', mode: 'cors', credentials: 'omit' });
-          if (!res.ok) throw new Error(`refresh-shot failed: ${res.status}`);
-          const json = await res.json();
-          console.log('refresh shot:', h, s, json);
-          progress.inc();
-          await new Promise(r => setTimeout(r, 600)); // 小休止
-        }
-        await new Promise(r => setTimeout(r, 800));   // 次アカウント前に一息
-      }
+      const qs = encodeURIComponent(handles.join(","));
+      const url = `${apiBase}/refresh?handles=${qs}`;
+      const res = await fetch(url, { method: "GET", mode: "cors", credentials: "omit" });
+      if (!res.ok) throw new Error(`/refresh failed: ${res.status}`);
+      const json = await res.json();
+      console.log("refresh:", json);
 
-      await new Promise(r => setTimeout(r, 1000));    // R2/CDN 反映待ち
+      // R2/CDNの反映を少し待ってから再読込
+      await new Promise(r => setTimeout(r, 1200));
       render();
     } catch (e) {
       alert(`更新APIエラー: ${e?.message || e}`);

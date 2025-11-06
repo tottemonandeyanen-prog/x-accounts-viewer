@@ -1,7 +1,7 @@
 // server.js
 import express from "express";
 import { chromium } from "playwright";
-import { refreshHandle, refreshShot } from "./scrape.js";
+import { refreshHandle } from "./scrape.js";
 import {
   getObjectTextFromR2,
   putObjectToR2,
@@ -162,6 +162,8 @@ app.get("/refresh", async (req, res) => {
 });
 
 app.get("/refresh-shot", async (req, res) => {
+  return res.status(400).json({ ok:false, error:"Use /refresh (batched & fast)" });
+  /*
   try {
     const handle = String(req.query.handle || "").replace(/^@/, "");
     const shot = String(req.query.shot || "profile");
@@ -172,6 +174,7 @@ app.get("/refresh-shot", async (req, res) => {
   } catch (e) {
     res.json({ ok: false, error: String(e?.message || e) });
   }
+    */
 });
 
 // ===== 起動（0.0.0.0でbind）=====
