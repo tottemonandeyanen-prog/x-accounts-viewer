@@ -262,7 +262,7 @@ const progress = (() => {
     if (handles.length === 0) { alert("ハンドルが空です"); return; }
 
     // 1回のHTTPに詰め込みすぎない（2〜3がオススメ）
-    const CHUNK_SIZE = 2;
+    const CHUNK_SIZE = 1;
 
     try {
       isRefreshing = true;
