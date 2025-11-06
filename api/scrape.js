@@ -356,8 +356,10 @@ export async function refreshHandle(handle) {
   const maxRetry = 2;
   let lastErr;
   for (let attempt = 1; attempt <= maxRetry; attempt++) {
-    const ctx = await newContext();
+    let ctx;
     try {
+      // ★ newContext() も try 内に入れて例外を捕まえる
+      ctx = await newContext();
       const page = await ctx.newPage();
       await captureProfile(page, handle);
       await captureLatestPosts(page, handle);
@@ -375,12 +377,8 @@ export async function refreshHandle(handle) {
       }
       await new Promise((r) => setTimeout(r, 1200)); // 短いリトライ待ち
     } finally {
-      try {
-        await ctx.close();
-      } catch {}
-      try {
-        await ctx.browser()?.close();
-      } catch {}
+      try { await ctx?.close(); } catch {}
+      try { await ctx?.browser()?.close(); } catch {}
     }
   }
   // 念のため（来ない想定）
