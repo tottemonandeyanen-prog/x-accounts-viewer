@@ -1,5 +1,5 @@
 // server.js （該当部分を追加/置換）
-
+import { refreshHandle } from "./scrape.js";
 import express from "express";
 import { chromium } from "playwright";
 import {
@@ -127,91 +127,26 @@ app.get("/refresh", async (req, res) => {
     .map((s) => s.trim())
     .filter(Boolean);
 
-  if (!handles.length) return res.status(400).json({ error: "handles required" });
+  if (!handles.length) {
+    return res.status(400).json({ error: "handles required" });
+  }
 
-  const profileSel = SELECTOR_PROFILE;
-  const postSelectors = UI_POST_SELECTORS.split(",").map((s) => s.trim()).filter(Boolean);
-  const timeout = Number(PAGE_TIMEOUT_MS) || 90000;
-  const width = Number(TARGET_WIDTH) || 900;
-  const quality = Number(JPEG_QUALITY) || 70;
-
-  const browser = await chromium.launch();
   const results = [];
+  for (const raw of handles) {
+    const withAt = raw.startsWith("@") ? raw : `@${raw}`;
+    const noAt   = withAt.slice(1);
 
-  try {
-    for (const raw of handles) {
-      const atHandle = norm.withAt(raw);
-      const noAt = norm.withoutAt(atHandle);
-
-      const tpl = UI_PATH_TMPL
-        .replace("{handle}", noAt)
-        .replace("@{handle}", `@${noAt}`);
-      const url = UI_BASE + tpl;
-
-      const ctx = await browser.newContext({ viewport: { width, height: 1200 } });
-      const page = await ctx.newPage();
-
-      const one = { handle: atHandle, ok: false, shots: [] };
-      try {
-        const resp = await page.goto(url, { waitUntil: 'domcontentloaded', timeout });
-        console.log('[goto]', url, resp?.status());
-
-        // ❶ readyマーカーは「存在」だけ5秒待つ（無くても続行）
-        try {
-          await page.waitForSelector('body[data-ready="1"]', { timeout: 5000 });
-          console.log('[wait] ready marker ok');
-        } catch {
-          console.log('[wait] ready marker missed (continue)');
-        }
-
-        // ❷ プロフィールと最初の投稿も「存在（attached）」だけを待つ
-        await page.waitForSelector(profileSel, { timeout });
-        console.log('[wait] profile found');
-        await page.waitForSelector(postSelectors[0], { timeout });
-        console.log('[wait] post-1 found');
-
-
-        // プロフィール
-        try {
-          const el = await page.$(profileSel);
-          if (el) {
-            const buf = await el.screenshot({ type: "jpeg", quality });
-            await uploadToR2(`accounts/${noAt}/profile.jpg`, buf, "image/jpeg");
-            one.shots.push("profile");
-          }
-        } catch (e) {
-          console.error("[upload profile] failed:", e?.message || e);
-        }
-
-        // 投稿（1～3）
-        for (let i = 0; i < postSelectors.length; i++) {
-          const sel = postSelectors[i];
-          try {
-            const el = await page.$(sel);
-            if (el) {
-              const buf = await el.screenshot({ type: "jpeg", quality });
-              await uploadToR2(`accounts/${noAt}/posts/${i + 1}.jpg`, buf, "image/jpeg");
-              one.shots.push(`post-${i + 1}`);
-            }
-          } catch (e) {
-            console.error(`[upload post ${i+1}] failed:`, e?.message || e);
-          }
-        }
-
-        one.ok = one.shots.length > 0;
-      } catch (e) {
-        one.error = String(e);
-      } finally {
-        await ctx.close();
-      }
-      results.push(one);
+    try {
+      const r = await refreshHandle(noAt); // ← scrape.js 側で「X本体」を開いて撮影
+      results.push({ handle: withAt, ok: true, shots: ["profile","post-1","post-2","post-3"] });
+    } catch (e) {
+      results.push({ handle: withAt, ok: false, error: String(e), shots: [] });
     }
-  } finally {
-    await browser.close();
   }
 
   res.json({ ok: true, results });
 });
+
 
 // 起動
 const port = process.env.PORT || 8080;
