@@ -162,7 +162,7 @@ app.get("/refresh", async (req, res) => {
           const el = await page.$(profileSel);
           if (el) {
             const buf = await el.screenshot({ type: "jpeg", quality });
-            await uploadToR2(`accounts/${atHandle}/profile.jpg`, buf, { ContentType: "image/jpeg" });
+            await uploadToR2(`accounts/${noAt}/profile.jpg`, buf, { ContentType: "image/jpeg" });
             one.shots.push("profile");
           }
         } catch {}
@@ -174,7 +174,7 @@ app.get("/refresh", async (req, res) => {
             const el = await page.$(sel);
             if (el) {
               const buf = await el.screenshot({ type: "jpeg", quality });
-              await uploadToR2(`accounts/${atHandle}/posts/${i + 1}.jpg`, buf, {
+              await uploadToR2(`accounts/${noAt}/posts/${i + 1}.jpg`, buf, {
                 ContentType: "image/jpeg",
               });
               one.shots.push(`post-${i + 1}`);
