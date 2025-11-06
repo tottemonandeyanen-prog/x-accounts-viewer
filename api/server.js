@@ -10,6 +10,20 @@ import {
 } from "./r2.js";
 
 const app = express();
+// CORS (UIからの呼び出しを許可)
+const UI_ORIGIN = (() => {
+  try { return new URL(process.env.UI_BASE).origin; } catch { return "*"; }
+})();
+
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", UI_ORIGIN);
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
+
 app.use(express.json());
 
 const {
