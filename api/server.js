@@ -7,6 +7,13 @@ import {
   putObjectToR2,
   deletePrefixFromR2,
 } from "./r2.js";
+// --- keep process alive (log instead of crash) ---
+process.on("unhandledRejection", (err) => {
+  console.error("[unhandledRejection]", err);
+});
+process.on("uncaughtException", (err) => {
+  console.error("[uncaughtException]", err);
+});
 
 const app = express();
 
