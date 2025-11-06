@@ -218,34 +218,20 @@ async function gotoProfile(page, handle) {
 async function captureProfile(page, handle) {
   await gotoProfile(page, handle);
 
-  // UIモード: 自作UIのセレクタで要素撮影
   if (IS_UI_MODE) {
+    // ★ まずは #profile-header を厳密撮影
     const target = SELECTOR_PROFILE || "#profile-header";
     let buf;
     try {
-      // まず指定があればそれ
+      // 要素だけを切り抜く（全画面にしない）
       buf = await screenshotByLocator(page, target);
-    } catch {
-      // 貼ってくれたX本体の“核”をユニオンでまとめ撮り（名前/説明/場所/ヘッダ等）
-      const unionTargets = [
-        'main [data-testid="UserName"]',
-        'main [data-testid^="UserAvatar-Container-"]',
-        'main [data-testid="UserDescription"]',
-        'main [data-testid="UserProfileHeader_Items"]',
-        'main a[href$="/header_photo"]',
-        'main a[href$="/following"]',
-        'main a[href$="/followers"]',
-        'main a[href$="/verified_followers"]',
-      ];
-      try {
-        buf = await screenshotUnion(page, unionTargets, { pad: 16 });
-      } catch {
-        // それでも無理なら代替セレクタ群 → 最後に全画面
-        for (const alt of ALT_WAIT_SELECTORS) {
-          try { buf = await screenshotByLocator(page, alt); break; } catch {}
-        }
-        if (!buf) buf = await screenshotFull(page);
+    } catch (e) {
+      console.warn(`[profile:UI] ${target} が見つからない → フォールバック`, e?.message);
+      // どうしても見つからない時だけ代替 → それでも無理なら全画面
+      for (const alt of ["#capture-root","#post-1","[data-testid='profile-header']"]) {
+        try { buf = await screenshotByLocator(page, alt); break; } catch {}
       }
+      if (!buf) buf = await screenshotFull(page);
     }
     const key = `accounts/${handle}/profile.jpg`;
     return uploadToR2(key, buf);

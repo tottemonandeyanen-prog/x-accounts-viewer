@@ -11,10 +11,27 @@
   </style>
 </head>
 <body>
-  <section id="profile-header"></section>
-  <article id="post-1" class="post"></article>
-  <article id="post-2" class="post"></article>
-  <article id="post-3" class="post"></article>
+    <!-- プロフィール塊（アバター / 名前 / ID / 自己紹介 / フォロワー・フォロー中・投稿数 など） -->
+    <section id="profile-header" style="contain: layout; isolation: isolate;">
+    <div class="profile-row">
+        <img class="avatar" src="..." alt="">
+        <div class="meta">
+        <div class="name">@KAGOME_JP</div>
+        <div class="counts">
+            <span data-testid="followers">フォロワー 12.3万</span>
+            <span data-testid="following">フォロー中 123</span>
+            <span data-testid="posts">投稿 3,456</span>
+        </div>
+        <p class="bio">……自己紹介……</p>
+        </div>
+    </div>
+    </section>
+
+    <!-- 直近3ポストのカード -->
+    <section id="post-1" class="post-card">…</section>
+    <section id="post-2" class="post-card">…</section>
+    <section id="post-3" class="post-card">…</section>
+
 
   <script>
     // ← ここがポイント：?handle=@xxx から取得

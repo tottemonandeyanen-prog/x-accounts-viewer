@@ -255,36 +255,40 @@ const progress = (() => {
     }
   };
 
+  // 刷新ボタン押下
   document.getElementById("btn-refresh").onclick = async () => {
     if (!apiBase) { alert("API_BASE が未設定です"); return; }
     const handles = [...state.handles].map(stripAt).filter(Boolean);
     if (handles.length === 0) { alert("ハンドルが空です"); return; }
 
     try {
-        isRefreshing = true;
-        progress.open(handles.length * 4);
+      isRefreshing = true;
+      progress.open(handles.length * 4);
 
-        // ====== R2更新開始 ======
-        const qs = new URLSearchParams({ handles: handles.join(",") }).toString();
-        const res = await fetch(`${apiBase}/refresh?${qs}`);
-        const data = await res.json();
-        console.log("refresh:", data);
+      const qs = new URLSearchParams({ handles: handles.join(",") }).toString();
+      const res = await fetch(`${apiBase}/refresh?${qs}`, {
+        method: "GET",
+        mode: "cors",
+        credentials: "omit"
+      });
+      const data = await res.json();
+      console.log("refresh:", data);
 
-        if (data.ng && data.ng.length) {
-        alert("更新に失敗したハンドルがあります:\n" + data.ng.map(x => `${x.handle}: ${x.error}`).join("\n"));
-        }
+      if (data.ng && data.ng.length) {
+        alert("更新NG:\n" + data.ng.map(x => `${x.handle}: ${x.error}`).join("\n"));
+      }
 
-        // ====== R2反映完了後に描画 ======
-        await new Promise(r => setTimeout(r, 1000)); // 1秒だけ待ってCDN遅延吸収
-        render(); // ← この1回だけでOK
+      await new Promise(r => setTimeout(r, 1000)); // R2/CDNの反映待ち
+      render();
 
     } catch (e) {
-        alert(`更新APIでエラー: ${e?.message || e}`);
+      alert(`更新APIでエラー: ${e?.message || e}`);
     } finally {
-        isRefreshing = false;
-        setTimeout(() => progress.close(), 5000);
+      isRefreshing = false;
+      setTimeout(() => progress.close(), 5000);
     }
   };
+
 
   // サーバー一覧を読み込んでから描画
   (async () => {
