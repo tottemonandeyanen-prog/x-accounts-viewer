@@ -5,7 +5,8 @@ import { uploadToR2 } from "./r2.js";
 // ---- tunables ----
 const JPEG_QUALITY     = Number(process.env.JPEG_QUALITY ?? 70);
 const TARGET_WIDTH     = Number(process.env.TARGET_WIDTH  ?? 900);
-const CAPTURE_TIMEOUT  = Number(process.env.CAPTURE_TIMEOUT_MS ?? 60000);
+// 両方の名前を見て、どちらか入っていれば採用
+const CAPTURE_TIMEOUT  = Number(process.env.CAPTURE_TIMEOUT_MS ?? process.env.PAGE_TIMEOUT_MS ?? 60000);
 const VIEWPORT_W       = Number(process.env.VIEWPORT_W ?? 1400);
 const VIEWPORT_H       = Number(process.env.VIEWPORT_H ?? 2200);
 
@@ -151,13 +152,11 @@ async function screenshotFull(page) {
 
 async function screenshotByLocator(page, locator) {
   const el = page.locator(locator).first();
-  // DOM に付くだけでなく可視になるまで待つ
-  await el.waitFor({ state: "visible" });
-  // 画面内に入れてからレイアウト安定を少しだけ待つ
+  await el.waitFor({ state: "visible", timeout: CAPTURE_TIMEOUT });
   await el.scrollIntoViewIfNeeded();
   await page.waitForLoadState("domcontentloaded");
-  await page.waitForTimeout(400);
-  // サイズ 0 の誤撮影防止
+  // 直後のリフロー対策で少し長めに待つ
+  await page.waitForTimeout(650);
   const box = await el.boundingBox();
   if (!box || box.width < 2 || box.height < 2) {
     throw new Error(`locator(${locator}) has invalid size: ${JSON.stringify(box)}`);
@@ -165,6 +164,7 @@ async function screenshotByLocator(page, locator) {
   const png = await el.screenshot({ type: "png" });
   return await toJpeg(png);
 }
+
 
 // ====== ナビゲーション ======
 async function gotoProfile(page, handle) {
@@ -352,14 +352,30 @@ async function captureLatestPosts(page, handle) {
 }
 
 export async function refreshHandle(handle) {
-  const ctx = await newContext();
-  try {
-    const page = await ctx.newPage();
-    const profile = await captureProfile(page, handle);
-    const posts = await captureLatestPosts(page, handle);
-    return { handle, profile, posts };
-  } finally {
-    try { await ctx.close(); } catch {}
-    try { await ctx.browser()?.close(); } catch {}
+  const maxRetry = 2;
+  let lastErr;
+  for (let attempt = 1; attempt <= maxRetry; attempt++) {
+    const ctx = await newContext();
+    try {
+      const page = await ctx.newPage();
+      await captureProfile(page, handle);
+      await captureLatestPosts(page, handle);
+      return { handle, ok: true };
+    } catch (e) {
+      lastErr = e;
+      const msg = String(e?.message || e);
+      // 一時的クラッシュっぽい時だけリトライ
+      const transient = /Target .* (closed|crashed)|Navigation failed|Execution context was destroyed/i.test(msg);
+      if (!transient || attempt === maxRetry) {
+        throw e;
+      }
+      // 少し待って再試行
+      await new Promise(r => setTimeout(r, 1200));
+    } finally {
+      try { await ctx.close(); } catch {}
+      try { await ctx.browser()?.close(); } catch {}
+    }
   }
+  // ここには来ない想定
+  throw lastErr || new Error("refreshHandle failed");
 }
