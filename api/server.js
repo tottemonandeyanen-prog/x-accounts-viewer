@@ -1,54 +1,40 @@
-// server.js （該当部分を追加/置換）
-import { refreshHandle } from "./scrape.js";
+// server.js
 import express from "express";
 import { chromium } from "playwright";
+import { refreshHandle } from "./scrape.js";
 import {
   getObjectTextFromR2,
   putObjectToR2,
   deletePrefixFromR2,
-  uploadToR2,
 } from "./r2.js";
 
 const app = express();
-// CORS (UIからの呼び出しを許可)
-const UI_ORIGIN = (() => {
-  try { return new URL(process.env.UI_BASE).origin; } catch { return "*"; }
-})();
+
+// ===== CORS（常時付与・最優先）=====
+const UI_ORIGIN =
+  process.env.UI_ORIGIN ||
+  "https://x-accounts-viewer-1.onrender.com"; // ←必要ならENVで差し替え
 
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", UI_ORIGIN);
   res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
 
 app.use(express.json());
 
-const {
-  UI_BASE = "",
-  UI_PATH_TMPL = "/accounts/@{handle}",
-  SELECTOR_PROFILE = "#profile-header",
-  UI_POST_SELECTORS = "#post-1,#post-2,#post-3",
-  TARGET_WIDTH = "900",
-  JPEG_QUALITY = "70",
-  PAGE_TIMEOUT_MS = "90000",
-  CONCURRENCY = "1",
-  R2_BUCKET = "x-accounts",
-} = process.env;
-
+// ===== 小物 =====
 const LIST_KEY = "accounts/_list.json";
-
-// ---- 追加: ハンドル正規化 & 用具 ----
 const norm = {
   withAt(h) {
-    if (!h) return "";
-    h = h.trim();
+    h = String(h || "").trim();
     return h.startsWith("@") ? h : `@${h}`;
   },
   withoutAt(h) {
-    if (!h) return "";
+    h = String(h || "").trim();
     return h.startsWith("@") ? h.slice(1) : h;
   },
 };
@@ -64,7 +50,6 @@ async function loadList() {
 }
 
 async function saveList(list) {
-  // 重複排除 & ソート（常に @付きで保存）
   const uniq = [...new Set(list.map(norm.withAt))].sort((a, b) =>
     a.localeCompare(b)
   );
@@ -74,7 +59,7 @@ async function saveList(list) {
   return uniq;
 }
 
-// ---- 診断 ----
+// ===== 診断 =====
 app.get("/healthz", (_req, res) => res.send("ok"));
 app.get("/playwrightz", async (_req, res) => {
   try {
@@ -87,17 +72,15 @@ app.get("/playwrightz", async (_req, res) => {
   }
 });
 
-// ---- アカウント一覧 ----
+// ===== アカウント一覧 =====
 app.get("/accounts", async (_req, res) => {
   const list = await loadList();
   res.json(list);
 });
 
 app.post("/accounts", async (req, res) => {
-  const raw = String(req.body.handle || "");
-  const handle = norm.withAt(raw);
+  const handle = norm.withAt(req.body?.handle || "");
   if (!handle) return res.status(400).json({ error: "handle required" });
-
   const list = await loadList();
   list.push(handle);
   const saved = await saveList(list);
@@ -105,49 +88,47 @@ app.post("/accounts", async (req, res) => {
 });
 
 app.delete("/accounts/:handle", async (req, res) => {
-  const raw = req.params.handle || "";
-  const handle = norm.withAt(raw);
-  const noAt = norm.withoutAt(handle);
-
-  // 先にR2のプレフィックス削除
-  await deletePrefixFromR2(`accounts/${handle}/`); // 旧レイアウト(@あり)
-  await deletePrefixFromR2(`accounts/${noAt}/`);   // 新レイアウト(@なし)
-
-  // _list.json からも確実に除去
+  const withAt = norm.withAt(req.params.handle || "");
+  const noAt = norm.withoutAt(withAt);
+  await deletePrefixFromR2(`accounts/${withAt}/`).catch(() => {});
+  await deletePrefixFromR2(`accounts/${noAt}/`).catch(() => {});
   const list = await loadList();
-  const saved = await saveList(list.filter((h) => h !== handle));
-
+  const saved = await saveList(list.filter((h) => h !== withAt));
   res.json({ ok: true, list: saved });
 });
 
-// ---- 撮影 ----
+// ===== 撮影（絶対にthrowしない）=====
 app.get("/refresh", async (req, res) => {
-  const handles = String(req.query.handles || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  try {
+    const handles = String(req.query.handles || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
 
-  if (!handles.length) {
-    return res.status(400).json({ error: "handles required" });
-  }
+    if (!handles.length) return res.json({ ok: true, results: [] });
 
-  const results = [];
-  for (const raw of handles) {
-    const withAt = raw.startsWith("@") ? raw : `@${raw}`;
-    const noAt   = withAt.slice(1);
+    const results = [];
+    for (const raw of handles) {
+      const withAt = norm.withAt(raw);
+      const noAt = norm.withoutAt(withAt);
 
-    try {
-      const r = await refreshHandle(noAt); // ← scrape.js 側で「X本体」を開いて撮影
-      results.push({ handle: withAt, ok: true, shots: ["profile","post-1","post-2","post-3"] });
-    } catch (e) {
-      results.push({ handle: withAt, ok: false, error: String(e), shots: [] });
+      // scrape.js 側が {handle, ok, error?} を返すようにしてある
+      const r = await refreshHandle(noAt);
+      results.push({
+        handle: withAt,
+        ok: r.ok,
+        error: r.ok ? undefined : r.error,
+        shots: r.ok ? ["profile", "post-1", "post-2", "post-3"] : [],
+      });
     }
-  }
 
-  res.json({ ok: true, results });
+    res.json({ ok: true, results });
+  } catch (e) {
+    // ここまで落ちてもJSONで返す（CORSも付く）
+    res.json({ ok: false, error: String(e && e.message ? e.message : e) });
+  }
 });
 
-
-// 起動
-const port = process.env.PORT || 8080;
-app.listen(port, () => console.log(`api on :${port}`));
+// ===== 起動（0.0.0.0でbind）=====
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, "0.0.0.0", () => console.log(`api on :${PORT}`));

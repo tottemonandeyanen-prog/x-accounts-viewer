@@ -352,6 +352,7 @@ async function captureLatestPosts(page, handle) {
 }
 
 export async function refreshHandle(handle) {
+  // この関数は絶対にthrowしない
   const maxRetry = 2;
   let lastErr;
   for (let attempt = 1; attempt <= maxRetry; attempt++) {
@@ -364,18 +365,24 @@ export async function refreshHandle(handle) {
     } catch (e) {
       lastErr = e;
       const msg = String(e?.message || e);
-      // 一時的クラッシュっぽい時だけリトライ
-      const transient = /Target .* (closed|crashed)|Navigation failed|Execution context was destroyed/i.test(msg);
+      const transient =
+        /Target .* (closed|crashed)|Navigation failed|Execution context was destroyed/i.test(
+          msg
+        );
       if (!transient || attempt === maxRetry) {
-        throw e;
+        // ここで終わるが throw はしない
+        return { handle, ok: false, error: msg };
       }
-      // 少し待って再試行
-      await new Promise(r => setTimeout(r, 1200));
+      await new Promise((r) => setTimeout(r, 1200)); // 短いリトライ待ち
     } finally {
-      try { await ctx.close(); } catch {}
-      try { await ctx.browser()?.close(); } catch {}
+      try {
+        await ctx.close();
+      } catch {}
+      try {
+        await ctx.browser()?.close();
+      } catch {}
     }
   }
-  // ここには来ない想定
-  throw lastErr || new Error("refreshHandle failed");
+  // 念のため（来ない想定）
+  return { handle, ok: false, error: String(lastErr || "refreshHandle failed") };
 }
