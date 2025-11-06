@@ -2,25 +2,93 @@ import { chromium } from "playwright";
 import sharp from "sharp";
 import { uploadToR2 } from "./r2.js";
 
-const JPEG_QUALITY = Number(process.env.JPEG_QUALITY ?? 70);
-const TARGET_WIDTH  = Number(process.env.TARGET_WIDTH  ?? 900);
-const CAPTURE_TIMEOUT = Number(process.env.CAPTURE_TIMEOUT_MS ?? 60000);
+// ---- tunables ----
+const JPEG_QUALITY     = Number(process.env.JPEG_QUALITY ?? 70);
+const TARGET_WIDTH     = Number(process.env.TARGET_WIDTH  ?? 900);
+const CAPTURE_TIMEOUT  = Number(process.env.CAPTURE_TIMEOUT_MS ?? 60000);
+const VIEWPORT_W       = Number(process.env.VIEWPORT_W ?? 1400);
+const VIEWPORT_H       = Number(process.env.VIEWPORT_H ?? 2200);
 
-// 環境変数
-const UI_BASE = process.env.UI_BASE?.replace(/\/+$/, ""); // 例: http://localhost:5173
-const UI_PATH_TMPL = (process.env.UI_PATH_TMPL || "/accounts/@{handle}").trim();
+// ---- UI routing ----
+const UI_BASE       = (process.env.UI_BASE || "").replace(/\/+$/, ""); // 例: http://localhost:5173
+const UI_PATH_TMPL  = (process.env.UI_PATH_TMPL || "/accounts/@{handle}").trim();
+const IS_UI_MODE    = !!UI_BASE;
+
+// ---- selectors ----
+const SELECTOR_PROFILE = (process.env.SELECTOR_PROFILE ?? "#profile-header").trim();
+const SELECTOR_TWEET   = (process.env.SELECTOR_TWEET   ?? `article[data-testid="tweet"]`).trim();
+
+// 自作UI or X本体の “何かしら見えたらOK” な待機用候補（ユニオンもこれを使う）
 const ALT_WAIT_SELECTORS = [
-  "#profile-header",               // 推奨
-  "#capture-root",                 // 旧実装
-  "#post-1",                       // 投稿カードが先に出る場合
+  SELECTOR_PROFILE,
+  "#capture-root",
+  "#post-1",
   "[data-testid='profile-header']",
-  "[data-capture-root]"
+  "[data-capture-root]",
+  // X本体の保険
+  "article[data-testid='tweet']",
+  "[data-testid='UserName']",
+  "[data-testid='UserProfileHeader_Items']",
 ];
-const SELECTOR_PROFILE = (process.env.SELECTOR_PROFILE ?? "").trim(); // 自作UIの #profile-header 等
-const SELECTOR_TWEET   = (process.env.SELECTOR_TWEET ?? 'article[data-testid="tweet"]').trim();
 
-// UIモードか判定
-const IS_UI_MODE = !!UI_BASE;
+async function captureProfileUnion(page, handle) {
+  // 1) 最初に「何かしら」見えるまで待つ
+  await waitForAny(page, ALT_WAIT_SELECTORS, 12000);
+
+  // 2) 候補セレクタ群の矩形を全部集めてユニオン
+  const rects = await getRects(page, ALT_WAIT_SELECTORS);
+  let clip = unionRect(rects, 10);
+
+  // 3) 何も拾えなかったら全画面フォールバック
+  if (!clip || clip.width <= 0 || clip.height <= 0) {
+    clip = { x: 0, y: 0, width: VIEWPORT_W, height: VIEWPORT_H };
+  }
+
+  const buf = await page.screenshot({ clip, type: "jpeg", quality: 100 });
+  const resized = await sharp(buf).resize({ width: TARGET_WIDTH }).jpeg({ quality: JPEG_QUALITY }).toBuffer();
+  await uploadToR2(`accounts/${handle}/profile.jpg`, resized, "image/jpeg");
+}
+
+// ===== helpers: wait & rect union =====
+async function waitForAny(page, selectors = [], timeout = 8000) {
+  const clean = selectors.filter(Boolean);
+  if (!clean.length) return null;
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    for (const sel of clean) {
+      const ok = await page.$(sel);
+      if (ok) return sel;
+    }
+    await page.waitForTimeout(250);
+  }
+  return null;
+}
+
+async function getRects(page, selectors = []) {
+  return await page.evaluate((sels) => {
+    const rects = [];
+    for (const s of sels) {
+      if (!s) continue;
+      const nodes = Array.from(document.querySelectorAll(s));
+      for (const el of nodes) {
+        const r = el.getBoundingClientRect();
+        if (r && r.width > 0 && r.height > 0) {
+          rects.push({ x: r.x + window.scrollX, y: r.y + window.scrollY, width: r.width, height: r.height });
+        }
+      }
+    }
+    return rects;
+  }, selectors);
+}
+
+function unionRect(rects, padding = 8) {
+  if (!rects.length) return null;
+  const minX = Math.floor(Math.min(...rects.map(r => r.x)) - padding);
+  const minY = Math.floor(Math.min(...rects.map(r => r.y)) - padding);
+  const maxX = Math.ceil(Math.max(...rects.map(r => r.x + r.width)) + padding);
+  const maxY = Math.ceil(Math.max(...rects.map(r => r.y + r.height)) + padding);
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
 
 async function screenshotUnion(page, selectors, { pad = 12 } = {}) {
   const boxes = [];
@@ -150,13 +218,29 @@ async function captureProfile(page, handle) {
     const target = SELECTOR_PROFILE || "#profile-header";
     let buf;
     try {
+      // まず指定があればそれ
       buf = await screenshotByLocator(page, target);
     } catch {
-      // 代替セレクタを順に試す
-      for (const alt of ALT_WAIT_SELECTORS) {
-        try { buf = await screenshotByLocator(page, alt); break; } catch {}
+      // 貼ってくれたX本体の“核”をユニオンでまとめ撮り（名前/説明/場所/ヘッダ等）
+      const unionTargets = [
+        'main [data-testid="UserName"]',
+        'main [data-testid^="UserAvatar-Container-"]',
+        'main [data-testid="UserDescription"]',
+        'main [data-testid="UserProfileHeader_Items"]',
+        'main a[href$="/header_photo"]',
+        'main a[href$="/following"]',
+        'main a[href$="/followers"]',
+        'main a[href$="/verified_followers"]',
+      ];
+      try {
+        buf = await screenshotUnion(page, unionTargets, { pad: 16 });
+      } catch {
+        // それでも無理なら代替セレクタ群 → 最後に全画面
+        for (const alt of ALT_WAIT_SELECTORS) {
+          try { buf = await screenshotByLocator(page, alt); break; } catch {}
+        }
+        if (!buf) buf = await screenshotFull(page);
       }
-      if (!buf) buf = await screenshotFull(page); // 最後の保険
     }
     const key = `accounts/${handle}/profile.jpg`;
     return uploadToR2(key, buf);
@@ -192,50 +276,79 @@ async function captureProfile(page, handle) {
   return uploadToR2(key, buf);
 }
 
+// posts 3枚撮って R2 に保存。足りなければフォールバックで必ず3枚埋める
 async function captureLatestPosts(page, handle) {
-  // UIモードなら自作UI側の #post-1, #post-2... などを推奨
   if (IS_UI_MODE) {
-    const ids = (process.env.UI_POST_SELECTORS || "#post-1,#post-2,#post-3")
-      .split(",").map(s => s.trim()).filter(Boolean);
-
+    const raw = (process.env.UI_POST_SELECTORS || "#post-1,#post-2,#post-3").trim();
     const results = [];
-    for (let i = 0; i < ids.length; i++) {
-      let jpg;
-      try {
-        jpg = await screenshotByLocator(page, ids[i]);
-      } catch (e) {
-        console.warn(`[captureLatestPosts] selector ${ids[i]} failed → fullpage fallback. reason=${e?.message}`);
-        jpg = await screenshotFull(page);
+
+    // A) カンマ区切りなら、各セレクタを個別撮影
+    if (raw.includes(",")) {
+      const sels = raw.split(",").map(s => s.trim()).filter(Boolean);
+      for (let i = 0; i < sels.length; i++) {
+        try {
+          const jpg = await screenshotByLocator(page, sels[i]);
+          results.push(jpg);
+        } catch (e) {
+          console.warn(`[posts] ${sels[i]} の撮影に失敗 → フォールバック全画面`, e?.message);
+          results.push(await screenshotFull(page)); // 個別失敗は全画面で埋め
+        }
       }
-      const key = `accounts/${handle}/posts/${i + 1}.jpg`;
-      results.push(await uploadToR2(key, jpg));
+    } else {
+      // B) 単一セレクタなら、上から最大3件を自動撮影
+      const sel = raw;
+      const loc = page.locator(sel);
+      const count = await loc.count();
+      const take = Math.min(3, count);
+      for (let i = 0; i < take; i++) {
+        try {
+          const jpg = await screenshotByLocator(page, `${sel} >> nth=${i}`);
+          results.push(jpg);
+        } catch (e) {
+          console.warn(`[posts] ${sel} nth=${i} 失敗 → その枠は全画面`, e?.message);
+          results.push(await screenshotFull(page));
+        }
+      }
     }
-    return results;
+
+    // 枠が3未満なら、最後は「プロフ or 全画面」で穴埋めして必ず3枚に
+    while (results.length < 3) {
+      try {
+        results.push(await screenshotByLocator(page, SELECTOR_PROFILE || "#profile-header"));
+      } catch {
+        results.push(await screenshotFull(page));
+      }
+    }
+
+    // R2 へ保存（1..3）
+    for (let i = 0; i < 3; i++) {
+      const key = `accounts/${handle}/posts/${i + 1}.jpg`;
+      await uploadToR2(key, results[i]);
+    }
+    return;
   }
 
-  // 旧モード（X本体）
-  await page.waitForSelector(SELECTOR_TWEET, { state: "attached", timeout: CAPTURE_TIMEOUT });
-  const items = page.locator(SELECTOR_TWEET);
-  const count = await items.count();
+  // === ここからは X 本体モード（m.twitter） ===
+  const sel = (process.env.SELECTOR_TWEET || 'article[data-testid="tweet"]').trim();
+  const loc = page.locator(sel);
+  const count = await loc.count();
   const take = Math.min(3, count);
-  const results = [];
+  const shots = [];
 
   for (let i = 0; i < take; i++) {
-    const el = items.nth(i);
-    await el.waitFor({ state: "visible" });
-    await el.scrollIntoViewIfNeeded();
-    await page.waitForTimeout(250); // レイアウト落ち着き待ち
-    const png = await el.screenshot({ type: "png" });
-    const jpg = await toJpeg(png);
-    const key = `accounts/${handle}/posts/${i + 1}.jpg`;
-    results.push(await uploadToR2(key, jpg));
+    try {
+      shots.push(await screenshotByLocator(page, `${sel} >> nth=${i}`));
+    } catch (e) {
+      console.warn(`[posts:x] ${sel} nth=${i} 失敗 → その枠は全画面`, e?.message);
+      shots.push(await screenshotFull(page));
+    }
   }
-  for (let i = take; i < 3; i++) {
-    const jpg = await screenshotFull(page);
+  while (shots.length < 3) shots.push(await screenshotFull(page));
+
+  for (let i = 0; i < 3; i++) {
     const key = `accounts/${handle}/posts/${i + 1}.jpg`;
-    results.push(await uploadToR2(key, jpg));
+    await uploadToR2(key, shots[i]);
   }
-  return results;
 }
 
 export async function refreshHandle(handle) {

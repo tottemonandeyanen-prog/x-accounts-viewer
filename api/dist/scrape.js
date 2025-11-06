@@ -4,7 +4,7 @@ import { uploadToR2 } from "./r2.js";
 
 const JPEG_QUALITY = Number(process.env.JPEG_QUALITY ?? 70);
 const TARGET_WIDTH  = Number(process.env.TARGET_WIDTH  ?? 900);
-const CAPTURE_TIMEOUT = Number(process.env.CAPTURE_TIMEOUT_MS ?? 30000);
+const CAPTURE_TIMEOUT = Number(process.env.CAPTURE_TIMEOUT_MS ?? 60000);
 
 // 環境変数
 const UI_BASE = process.env.UI_BASE?.replace(/\/+$/, ""); // 例: http://localhost:5173
@@ -93,24 +93,44 @@ async function screenshotByLocator(page, locator) {
 // ====== ナビゲーション ======
 async function gotoProfile(page, handle) {
   const user = handle.replace(/^@/, "");
+  if (IS_UI_MODE) {
+    await page.setViewportSize({ width: 1400, height: 2200 });
 
-    if (IS_UI_MODE) {
-        await page.setViewportSize({ width: 1400, height: 2200 });
-        const url = `${UI_BASE}/accounts/@${user}`;
+    const candidates = [
+      UI_PATH_TMPL.replace("{handle}", user).replace("@{handle}", `@${user}`),
+      `/accounts/${user}`,
+      `/accounts/@${user}`,
+      `/index.html#/accounts/@${user}`,
+      `/#/accounts/@${user}`,
+      `/index.html`
+    ].map(p => `${UI_BASE}${p}`);
+
+    let ok = false;
+    for (const url of candidates) {
+      try {
         await page.goto(url, { waitUntil: "domcontentloaded", timeout: CAPTURE_TIMEOUT });
-        await page.waitForSelector("#capture-root",   { state: "attached", timeout: CAPTURE_TIMEOUT });
-        await page.waitForSelector("#profile-header", { state: "visible",  timeout: CAPTURE_TIMEOUT });
-        await page.waitForLoadState("networkidle");
-        await page.waitForTimeout(800);
-    } else {
-    // 従来のX本体（モバイル版）
-    const storage = process.env.PLAYWRIGHT_STORAGE_STATE;
-    if (!storage) {
-      throw new Error("X本体を撮る場合は PLAYWRIGHT_STORAGE_STATE が必要です（ログイン状態JSON）");
+        // どれか一つでも“見えたら”OKにする（厳密縛りをやめる）
+        for (const sel of ALT_WAIT_SELECTORS) {
+          try {
+            await page.locator(sel).first().waitFor({ state: "visible", timeout: 4000 });
+            ok = true;
+            break;
+          } catch {}
+        }
+        if (ok) break;
+        await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(()=>{});
+      } catch {}
     }
-    await page.goto(`https://m.twitter.com/${user}`, { waitUntil: "domcontentloaded" });
-    await page.waitForTimeout(800);
+    // 見つからなくても続行（後段でフルページ撮影フォールバックあり）
+    await page.waitForTimeout(500);
+    return;
   }
+
+  // X本体モード（既存のまま）
+  const storage = process.env.PLAYWRIGHT_STORAGE_STATE;
+  if (!storage) throw new Error("X本体を撮る場合は PLAYWRIGHT_STORAGE_STATE が必要です（ログイン状態JSON）");
+  await page.goto(`https://m.twitter.com/${user}`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(800);
 }
 
 // ====== 撮影 ======
@@ -118,18 +138,21 @@ async function captureProfile(page, handle) {
   await gotoProfile(page, handle);
 
   // UIモード: 自作UIのセレクタで要素撮影
-  if (IS_UI_MODE) {
+    if (IS_UI_MODE) {
     const target = SELECTOR_PROFILE || "#profile-header";
     let buf;
     try {
-      buf = await screenshotByLocator(page, target);
-    } catch (e) {
-      console.warn(`[captureProfile] selector ${target} failed → fullpage fallback. reason=${e?.message}`);
-      buf = await screenshotFull(page);
+        buf = await screenshotByLocator(page, target);
+    } catch {
+        // 代替セレクタを順に試す
+        for (const alt of ALT_WAIT_SELECTORS) {
+        try { buf = await screenshotByLocator(page, alt); break; } catch {}
+        }
+        if (!buf) buf = await screenshotFull(page); // 最後の保険
     }
     const key = `accounts/${handle}/profile.jpg`;
     return uploadToR2(key, buf);
-  }
+    }
 
   // 旧モード（X本体）
   let buf;
