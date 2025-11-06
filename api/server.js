@@ -107,10 +107,11 @@ app.post("/accounts", async (req, res) => {
 app.delete("/accounts/:handle", async (req, res) => {
   const raw = req.params.handle || "";
   const handle = norm.withAt(raw);
+  const noAt = norm.withoutAt(handle);
 
   // 先にR2のプレフィックス削除
-  const prefix = `accounts/${handle}/`; // “@付き”で合わせる
-  await deletePrefixFromR2(prefix);
+  await deletePrefixFromR2(`accounts/${handle}/`); // 旧レイアウト(@あり)
+  await deletePrefixFromR2(`accounts/${noAt}/`);   // 新レイアウト(@なし)
 
   // _list.json からも確実に除去
   const list = await loadList();
@@ -152,7 +153,12 @@ app.get("/refresh", async (req, res) => {
 
       const one = { handle: atHandle, ok: false, shots: [] };
       try {
-        await page.goto(url, { timeout });
+        const resp = await page.goto(url, { waitUntil: 'domcontentloaded', timeout });
+        console.log('[goto]', url, resp?.status());
+
+        await page.waitForSelector('body[data-ready="1"]', { timeout }); // まずUI側のonloadマーカー
+        await page.waitForSelector(profileSel, { timeout, state: 'visible' });
+        await page.waitForSelector(postSelectors[0], { timeout, state: 'visible' });
         await page.waitForSelector(`body[data-ready="1"], ${profileSel}, ${postSelectors[0]}`, { timeout });
         // セレクタが出るまで待つ（プロフィール or 最初の投稿）
         await page.waitForSelector(`${profileSel}, ${postSelectors[0]}`, { timeout });
