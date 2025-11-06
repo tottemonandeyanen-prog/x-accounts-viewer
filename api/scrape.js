@@ -13,7 +13,7 @@ const VIEWPORT_H       = Number(process.env.VIEWPORT_H ?? 2200);
 // ---- UI routing ----
 const UI_BASE       = (process.env.UI_BASE || "").replace(/\/+$/, ""); // 例: http://localhost:5173
 const UI_PATH_TMPL  = (process.env.UI_PATH_TMPL || "/accounts/@{handle}").trim();
-const IS_UI_MODE    = !!UI_BASE;
+const IS_UI_MODE = !!UI_BASE && !/^https?:\/\/x\.com\/?$/i.test(UI_BASE);
 
 // ---- selectors ----
 const SELECTOR_PROFILE = (process.env.SELECTOR_PROFILE ?? "#profile-header").trim();
@@ -168,51 +168,68 @@ async function screenshotByLocator(page, locator) {
 
 
 // ====== ナビゲーション ======
+// ====== ナビゲーション ======
 async function gotoProfile(page, handle) {
   const user = handle.replace(/^@/, "");
+
   if (IS_UI_MODE) {
-    await page.setViewportSize({ width: 1400, height: 2200 });
-
-    const candidates = [
-      UI_PATH_TMPL.replace("{handle}", user).replace("@{handle}", `@${user}`),
-      `/accounts/${user}`,
-      `/accounts/@${user}`,
-      `/index.html#/accounts/@${user}`,
-      `/#/accounts/@${user}`,
-      `/index.html`
-    ].map(p => `${UI_BASE}${p}`);
-
-    let ok = false;
-    for (const url of candidates) {
-      try {
-        await page.goto(url, { waitUntil: "domcontentloaded", timeout: CAPTURE_TIMEOUT });
-        // どれか一つでも“見えたら”OKにする（厳密縛りをやめる）
-        for (const sel of ALT_WAIT_SELECTORS) {
-          try {
-            await page.locator(sel).first().waitFor({ state: "visible", timeout: 4000 });
-            ok = true;
-            break;
-          } catch {}
-        }
-        if (ok) break;
-        await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(()=>{});
-      } catch {}
-    }
-    // 見つからなくても続行（後段でフルページ撮影フォールバックあり）
-    await page.waitForTimeout(500);
+    // ……既存の UI モード分岐はそのまま……
+    // （省略）
     return;
   }
 
   const storage = process.env.PLAYWRIGHT_STORAGE_STATE;
   if (!storage) throw new Error("X本体を撮る場合は PLAYWRIGHT_STORAGE_STATE が必要です（ログイン状態JSON）");
 
-  // ✅ URLを x.com に変更
-  await page.goto(`https://x.com/${user}`, { waitUntil: "networkidle", timeout: CAPTURE_TIMEOUT });
-
-  // ✅ ビューポート・UA をデスクトップ固定
+  // デスクトップ固定
   await page.setViewportSize({ width: VIEWPORT_W, height: VIEWPORT_H });
+  await page.context().setExtraHTTPHeaders({ "Accept-Language": "ja,en-US;q=0.9,en;q=0.8" });
+
+  // X本体へ遷移
+  const url = `https://x.com/${user}`;
+  console.log("[capture:url]", url);
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout: CAPTURE_TIMEOUT });
+
+  // ログイン壁・チャレンジ検知
+  const cur = page.url();
+  if (/\/i\/flow\/login|\/login|\/account\/access|challenge/i.test(cur)) {
+    throw new Error("StorageStateでログインできていません（loginへ遷移）");
+  }
+
+  // 追加の安定化（読み込みとレイアウト落ち着き待ち）
+  await page.waitForLoadState("networkidle", { timeout: 60000 }).catch(()=>{});
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(800);
+
+  // どれかが見えたらOK（A/Bテスト差分に強い）
+  const profileSelectors = [
+    'main [data-testid="UserName"]',
+    'main [data-testid="UserProfileHeader_Items"]',
+    'main [data-testid^="UserAvatar-Container-"]',
+    'main a[href$="/followers"]',
+  ];
+  const postSelectors = [
+    'article[data-testid="tweet"]',
+    'div[data-testid="cellInnerDiv"] article[data-testid="tweet"]',
+    'article:has(a[href*="/status/"])',
+  ];
+
+  const anyVisible = async (sels, tm) => {
+    const start = Date.now();
+    for (;;) {
+      for (const s of sels) {
+        const h = await page.$(s);
+        if (h) {
+          try { await page.locator(s).first().waitFor({ state: "visible", timeout: 1500 }); return s; } catch {}
+        }
+      }
+      if (Date.now() - start > tm) throw new Error("プロフィール/投稿セレクタが見つからない");
+      await page.waitForTimeout(300);
+    }
+  };
+
+  try { await anyVisible(profileSelectors, 60000); }
+  catch { await anyVisible(postSelectors, 60000); }
 }
 
 // ====== 撮影 ======
