@@ -176,10 +176,12 @@ app.get("/refresh", async (req, res) => {
           const el = await page.$(profileSel);
           if (el) {
             const buf = await el.screenshot({ type: "jpeg", quality });
-            await uploadToR2(`accounts/${noAt}/profile.jpg`, buf, { ContentType: "image/jpeg" });
+            await uploadToR2(`accounts/${noAt}/profile.jpg`, buf, "image/jpeg");
             one.shots.push("profile");
           }
-        } catch {}
+        } catch (e) {
+          console.error("[upload profile] failed:", e?.message || e);
+        }
 
         // 投稿（1～3）
         for (let i = 0; i < postSelectors.length; i++) {
@@ -188,12 +190,12 @@ app.get("/refresh", async (req, res) => {
             const el = await page.$(sel);
             if (el) {
               const buf = await el.screenshot({ type: "jpeg", quality });
-              await uploadToR2(`accounts/${noAt}/posts/${i + 1}.jpg`, buf, {
-                ContentType: "image/jpeg",
-              });
+              await uploadToR2(`accounts/${noAt}/posts/${i + 1}.jpg`, buf, "image/jpeg");
               one.shots.push(`post-${i + 1}`);
             }
-          } catch {}
+          } catch (e) {
+            console.error(`[upload post ${i+1}] failed:`, e?.message || e);
+          }
         }
 
         one.ok = one.shots.length > 0;
