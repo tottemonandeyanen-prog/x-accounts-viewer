@@ -32,6 +32,16 @@ const ALT_WAIT_SELECTORS = [
   "[data-testid='UserProfileHeader_Items']",
 ];
 
+let _browserPromise = null;
+async function getBrowser() {
+  if (!_browserPromise) {
+    _browserPromise = chromium.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-dev-shm-usage"]
+    });
+  }
+  return _browserPromise;
+}
 // ★★★ scrape.js に追記（既存の import/定数群の下あたりに置いてOK） ★★★
 
 // 1枚だけ「投稿」を撮る（index: 0,1,2）
@@ -178,23 +188,21 @@ async function screenshotUnion(page, selectors, { pad = 12 } = {}) {
 
 async function newContext() {
   const storage = process.env.PLAYWRIGHT_STORAGE_STATE;
-  const browser = await chromium.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-dev-shm-usage"]
-  });
+  const browser = await getBrowser(); // ← 毎回起動しない！
   const viewport = {
-    width:  Number(process.env.VIEWPORT_W ?? 1400),
-    height: Number(process.env.VIEWPORT_H ?? 2200),
+    width:  Number(process.env.VIEWPORT_W ?? 1200),
+    height: Number(process.env.VIEWPORT_H ?? 1800),
   };
-  // Context 作成時に viewport を指定する（正しいやり方）
   const ctx = await browser.newContext({
-  viewport,
-  userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  ...(storage ? { storageState: JSON.parse(storage) } : {})
+    viewport,
+    userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+    ...(storage ? { storageState: JSON.parse(storage) } : {})
   });
-  ctx.setDefaultTimeout(CAPTURE_TIMEOUT);
+  // ナビ・待機の上限は短め（Renderの100sより十分短く）
+  ctx.setDefaultTimeout(Number(process.env.CAPTURE_TIMEOUT_MS ?? 70000));
   return ctx;
 }
+
 
 async function toJpeg(pngBuf) {
   return await sharp(pngBuf)
@@ -242,10 +250,20 @@ async function gotoProfile(page, handle) {
   await page.setViewportSize({ width: VIEWPORT_W, height: VIEWPORT_H });
   await page.context().setExtraHTTPHeaders({ "Accept-Language": "ja,en-US;q=0.9,en;q=0.8" });
 
+  // できるだけ軽く：広告・解析・動画を止める
+  await page.route('**/*', route => {
+    const u = route.request().url();
+    if (/doubleclick|googletagmanager|google-analytics|analytics\.twitter|branch\.io|sentry\.io/i.test(u)) return route.abort();
+    if (/\/i\/adsct|ads-api\.twitter\.com/i.test(u)) return route.abort();
+    if (/\.mp4(\?.*)?$|\.m3u8(\?.*)?$|\/amplify_video\//i.test(u)) return route.abort();
+    route.continue();
+  });
+
   // X本体へ遷移
-  const url = `https://x.com/${user}`;
+  const url = `https://mobile.twitter.com/${user}?lang=ja`;
   console.log("[capture:url]", url);
-  await page.goto(url, { waitUntil: "domcontentloaded", timeout: CAPTURE_TIMEOUT });
+  // 初期表示だけ待つ（長い待機をやめる）
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
 
   // ログイン壁・チャレンジ検知
   const cur = page.url();
@@ -254,9 +272,8 @@ async function gotoProfile(page, handle) {
   }
 
   // 追加の安定化（読み込みとレイアウト落ち着き待ち）
-  await page.waitForLoadState("networkidle", { timeout: 60000 }).catch(()=>{});
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.waitForTimeout(800);
+  await page.waitForTimeout(250);  // 軽く待つだけ
 
   // どれかが見えたらOK（A/Bテスト差分に強い）
   const profileSelectors = [
@@ -285,8 +302,10 @@ async function gotoProfile(page, handle) {
     }
   };
 
-  try { await anyVisible(profileSelectors, 60000); }
-  catch { await anyVisible(postSelectors, 60000); }
+  const seen =
+    (await anyVisible(profileSelectors, 8000).catch(()=>null)) ||
+    (await anyVisible(postSelectors, 8000).catch(()=>null));
+  if (!seen) console.warn("[gotoProfile] no key selector in 16s, will fallback at capture.");
 }
 
 // ====== 撮影 ======
