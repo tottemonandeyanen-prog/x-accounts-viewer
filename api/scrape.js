@@ -202,11 +202,16 @@ async function gotoProfile(page, handle) {
     return;
   }
 
-  // X本体モード（既存のまま）
   const storage = process.env.PLAYWRIGHT_STORAGE_STATE;
   if (!storage) throw new Error("X本体を撮る場合は PLAYWRIGHT_STORAGE_STATE が必要です（ログイン状態JSON）");
-  await page.goto(`https://m.twitter.com/${user}`, { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(800);
+
+  // ✅ URLを x.com に変更
+  await page.goto(`https://x.com/${user}`, { waitUntil: "networkidle", timeout: CAPTURE_TIMEOUT });
+
+  // ✅ ビューポート・UA をデスクトップ固定
+  await page.setViewportSize({ width: VIEWPORT_W, height: VIEWPORT_H });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(1500);
 }
 
 // ====== 撮影 ======
